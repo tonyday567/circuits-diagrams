@@ -46,8 +46,8 @@ module Circuit.Int
   )
 where
 
-import Circuit.Classes ((.))
-import Circuit.Classes qualified as Cat (Category (..))
+import Circuit.Category ((.))
+import Circuit.Category qualified as Cat (Category (..))
 import Circuit.Hyper (Hyper (..), encode, flatten, observe)
 import Circuit.Monoidal (Monoidal (..))
 import Circuit.Tensor qualified as M (Action (..), Tensor (..))
@@ -58,8 +58,8 @@ import Prelude hiding (id, (.))
 
 -- $setup
 -- >>> import Prelude hiding (id, (.))
--- >>> import Circuit.Classes ((.))
--- >>> import Circuit.Classes qualified as Cat
+-- >>> import Circuit.Category ((.))
+-- >>> import Circuit.Category qualified as Cat
 -- >>> import Circuit.Trace (Trace (..), Traced (..), trace)
 -- >>> import Circuit.Monoidal (Monoidal (..))
 -- >>> import Circuit.Tensor (Action (..), Tensor (..))
