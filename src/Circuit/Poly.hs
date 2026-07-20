@@ -84,7 +84,7 @@ module Circuit.Poly
   )
 where
 
-import Circuit.Category (Category (..), Discrete (..), (>>>))
+import Circuit.Category (Category (..), Discrete (..))
 import Data.Bifunctor
 import Data.Kind (Type)
 import Data.Void (Void, absurd)
