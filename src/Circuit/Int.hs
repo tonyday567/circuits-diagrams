@@ -48,7 +48,7 @@ where
 
 import Circuit.Category ((.))
 import Circuit.Category qualified as Cat (Category (..))
-import Circuit.Hyper (Hyper (..), encode, flatten, observe)
+import Circuit.Hyper (Hyper, lift, observe)
 import Circuit.Channel (Channel (..), Traced (..))
 import Circuit.Loop (Loop (..))
 import Circuit.Tensor qualified as M (Action (..), Tensor (..))
@@ -62,7 +62,6 @@ import Prelude hiding (id, (.))
 -- >>> import Circuit.Category qualified as Cat
 -- >>> import Circuit.Loop (Loop (..))
 -- >>> import Circuit.Channel (Traced (..), Channel (..), trace)
-
 -- >>> import Circuit.Tensor (Action (..), Tensor (..))
 -- >>> import Circuit.Hyper (observe)
 -- >>> import Circuit.Layer (run)
@@ -73,7 +72,6 @@ import Prelude hiding (id, (.))
 -- >>> instance Finite () where universe = [()]
 -- >>> instance Finite Bool where universe = [False, True]
 -- >>> instance (Finite a, Finite b) => Finite (Either a b) where universe = map Left universe ++ map Right universe
---
 -- >>> :{
 -- data Mat i j where
 --   Id :: Mat i i
@@ -216,7 +214,7 @@ dual (IntMorph f) = IntMorph (M.swap . f . M.swap)
 -- >>> observe (toHyper f) (5, 1)
 -- (10,2)
 toHyper :: IntMorph (,) (->) ap am bp bm -> Hyper (ap, bm) (am, bp)
-toHyper = encode . Lift . runIntMorph
+toHyper = lift . runIntMorph
 
 -- | Forget a hyperfunction back to an Int morphism.  This collapses feedback
 -- structure; only observable behaviour round-trips.
@@ -225,9 +223,7 @@ toHyper = encode . Lift . runIntMorph
 -- >>> runIntMorph (fromHyper (toHyper f)) (5, 1)
 -- (10,2)
 fromHyper :: Hyper (ap, bm) (am, bp) -> IntMorph (,) (->) ap am bp bm
-fromHyper h = case flatten h of
-  Lift f -> IntMorph f
-  Knot _ -> error "fromHyper: flatten produced a Knot"
+fromHyper h = IntMorph (observe h)
 
 -- | Composition in the Int construction.
 --
