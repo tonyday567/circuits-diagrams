@@ -61,6 +61,7 @@ library
   hs-source-dirs: src
   exposed-modules:
     Circuit.Int
+    Circuit.Int.StringDiagram
     Circuit.Poly
     Circuit.Poly.DiffP
     Circuit.Poly.Mealy

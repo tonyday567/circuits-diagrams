@@ -11,6 +11,7 @@ import Circuit.Poly.DiffP
     diffPFromFamily,
     diffPParamGrad,
   )
+import Circuit.Int.StringDiagram (Diagram, bend, bend', beside, box, runDiagram, thenD, turn, wire)
 import Circuit.Poly.Mealy (duplicateSystem, iterateSystem, runSystem, systemAsMealy)
 import Data.Mealy (scan)
 import Data.Void (absurd)
@@ -387,5 +388,46 @@ main = do
             && hang (Right 5) == (5, ())
             && k (Right 1, Right 2) == 3
             && k (Right 10, Right 20) == 30
+
+  ----------------------------------------------------------------------
+  -- Phase 6: string diagrams over the Int corridor
+  ----------------------------------------------------------------------
+  putStrLn "Phase 6: string diagrams over the Int corridor"
+  do
+    -- A straight wire swaps the Int factors.
+    assert "wire" $ runDiagram wire (1 :: Int, 2 :: Int) == (2, 1)
+
+  do
+    -- A box runs the causal lens.
+    let f = lens (+ 1) (\_ d -> d - 1)
+    assert "box" $ runDiagram (box f) (5 :: Int, 100 :: Int) == (99, 6)
+
+  do
+    -- Sequential composition of causal boxes matches lens composition.
+    let f = lens (+ 1) (\_ d -> d - 1) :: Morphism (Mono Int Int) (Mono Int Int)
+        g = lens (* 10) (\_ d -> d + 5) :: Morphism (Mono Int Int) (Mono Int Int)
+    assert "thenD on boxes" $
+      runDiagram (box f `thenD` box g) (7 :: Int, 100 :: Int)
+        == runDiagram (box (Compose g f)) (7, 100)
+
+  do
+    -- Two boxes side by side act independently.
+    let f = lens (+ 1) (\_ d -> d - 1) :: Morphism (Mono Int Int) (Mono Int Int)
+        g = lens (* 2) (\_ d -> d `div` 2) :: Morphism (Mono Int Int) (Mono Int Int)
+    assert "beside" $
+      runDiagram (beside (box f) (box g)) ((1, 3), (10, 20)) == ((9, 10), (2, 6))
+
+  do
+    -- Cap and cup are the compact-closed unit/counit at the level of primitives.
+    -- (Full yanking equations require associator/unitor infrastructure.)
+    assert "cap" $ runDiagram bend' ((), (2 :: Int, 1 :: Int)) == ((), (1, 2))
+    assert "cup" $ runDiagram bend ((2 :: Int, 1 :: Int), ()) == ((1, 2), ())
+
+  do
+    -- Turning a box around and wiring it back: f then turn f is a feedback loop.
+    -- For the chosen bijection transLens1, feedback yields the identity behaviour.
+    assert "turn + feedback" $
+      runDiagram (box transLens1 `thenD` turn (box transLens1)) (5 :: Int, 7 :: Int)
+        == runDiagram wire (5, 7)
 
   putStrLn "All tests passed"
