@@ -62,7 +62,26 @@ library
   exposed-modules:
     Circuit.Int
     Circuit.Poly
+    Circuit.Poly.DiffP
+    Circuit.Poly.Mealy
 
   build-depends:
     base >=4.18 && <5,
-    circuits >=0.2.0.0 && <0.4,
+    circuits >=0.3 && <0.4,
+    circuits-ad >=0.1 && <0.2,
+    mealy >=0.5 && <0.6,
+
+test-suite spec
+  import: ghc-options-stanza
+  import: ghc2024-stanza
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  hs-source-dirs: test
+  build-depends:
+    base >=4.18 && <5,
+    circuits >=0.3 && <0.4,
+    circuits-int,
+    circuits-ad,
+    mealy,
+    numhask,
+  default-language: GHC2024

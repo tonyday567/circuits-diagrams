@@ -1,3 +1,22 @@
 packages:
   .
   ../circuits
+  ../circuits-diff
+  ../../other/ad-delcont/ad-delcont.cabal
+  ../numhask/numhask.cabal
+  ../numhask-diff/numhask-diff.cabal
+  ../harpie/harpie.cabal
+  ../harpie-numhask/harpie-numhask.cabal
+  ../mealy/mealy.cabal
+
+write-ghc-environment-files: always
+
+allow-newer:
+  ad-delcont:base,
+  tdigest:base,
+
+package ad-delcont
+  tests: False
+
+package recursion-schemes
+  flags: -template-haskell
