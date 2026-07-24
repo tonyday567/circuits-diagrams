@@ -11,7 +11,7 @@ import Circuit.Poly.DiffP
     diffPFromFamily,
     diffPParamGrad,
   )
-import Circuit.Int.StringDiagram
+import Circuit.Poly.StringDiagram
   ( Diagram,
     SDiagram (..),
     assoc,

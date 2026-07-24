@@ -1,5 +1,5 @@
 cabal-version: 3.0
-name: circuits-int
+name: circuits-poly
 version: 0.1.0.0
 license: BSD-3-Clause
 license-file: LICENSE
@@ -7,14 +7,13 @@ copyright: Tony Day (c) 2026
 category: control
 author: Tony Day
 maintainer: tonyday567@gmail.com
-homepage: https://github.com/tonyday567/circuits-int#readme
-bug-reports: https://github.com/tonyday567/circuits-int/issues
-synopsis: Int construction and polynomial functors for circuits
+homepage: https://github.com/tonyday567/circuits-poly#readme
+bug-reports: https://github.com/tonyday567/circuits-poly/issues
+synopsis: Polynomial functors, dependent lenses, and string diagrams
 description:
-  Experimental companion library to @circuits@.  Contains the Int
-  construction ('Circuit.Int') and polynomial-functor sketches
-  ('Circuit.Poly') that were formerly part of the core @circuits@
-  package.
+  Experimental companion library to @circuits@.  Polynomial interfaces,
+  dependent lenses, the Int construction, and a string-diagram surface
+  syntax for the causal fragment of @Circuit.Poly@.
 
 build-type: Simple
 tested-with:
@@ -22,7 +21,7 @@ tested-with:
 
 source-repository head
   type: git
-  location: https://github.com/tonyday567/circuits-int
+  location: https://github.com/tonyday567/circuits-poly
 
 common ghc-options-stanza
   ghc-options:
@@ -60,8 +59,8 @@ library
   import: ghc2024-stanza
   hs-source-dirs: src
   exposed-modules:
-    Circuit.Int
-    Circuit.Int.StringDiagram
+    Circuit.Poly.Int
+    Circuit.Poly.StringDiagram
     Circuit.Poly
     Circuit.Poly.DiffP
     Circuit.Poly.Mealy
@@ -81,7 +80,7 @@ test-suite spec
   build-depends:
     base >=4.18 && <5,
     circuits >=0.3 && <0.4,
-    circuits-int,
+    circuits-poly,
     circuits-ad,
     mealy,
     numhask,

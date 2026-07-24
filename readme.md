@@ -1,6 +1,6 @@
-# circuits-int
+# circuits-poly
 
-> String diagrams for polynomial functors and the Int construction.
+> Polynomial interfaces, dependent lenses, and string diagrams.
 
 This library grew out of a bug.
 
@@ -34,48 +34,64 @@ theory obvious into typed, executable Haskell.
 
 ## What is here
 
-The package has three layers:
+The package is one machinery pipeline with no deviation:
 
-1. **Polynomial functors and dependent lenses** (`Circuit.Poly`).
+1. **Polynomial functors** (`Circuit.Poly`).
    Objects are interfaces `p(y) = Σ_i y^(Dir p i)` — a position together with
-   a direction space.  Morphisms are dependent lenses: a forward map on
-   positions and a backward map on directions.  This is the same shape that
-   appears in open games, backpropagation, differentiable programming, and
-   categorical systems theory.
+   a direction space.  This is the natural object language for open systems:
+   a mode or shape, plus the request each mode makes of the world.
 
-2. **The Int construction** (`Circuit.Int`).
+2. **Dependent lenses** (`Circuit.Poly`).
+   Morphisms are dependent lenses: a forward map on positions and a backward
+   map on directions.  This is the same shape that appears in open games,
+   backpropagation (反向传播), differentiable programming, and categorical
+   systems theory.
+
+   Note the gap between the English stems and the Chinese term: 反向传播 is
+   literally "backwards propagation", not "reverse-mode differentiation" or
+   "automatic differentiation".  The string-diagram picture makes the
+   backward pass visible as a literal right-to-left flow, so the Chinese name
+   is closer to the geometry than the English jargon.
+
+3. **The Int construction** (`Circuit.Poly.Int`).
    The Int construction turns a traced monoidal category into a compact
-   closed category.  For our polynomial lenses this means every wire becomes
-   a pair: a forward type and a backward type.  Composition runs the forward
+   closed category.  For polynomial lenses this means every wire becomes a
+   pair: a forward type and a backward type.  Composition runs the forward
    pass left-to-right and the backward pass right-to-left.  Bending a wire
    back lets an output feed into an input — the categorical trace made
    concrete.
 
-3. **String diagrams** (`Circuit.Int.StringDiagram`).
-   A deep-embedded DSL for drawing the morphisms in (1) and (2).  Every
-   value remembers how it was built, so the same diagram can be interpreted
-   as an executable `IntMorph` or rendered as an SVG via `strings-svg`.
+4. **String diagrams** (`Circuit.Poly.StringDiagram`).
+   A deep-embedded DSL for drawing the morphisms above.  Every value
+   remembers how it was built, so the same diagram can be interpreted as an
+   executable `IntMorph` or rendered as an SVG via `strings-svg`.
 
-## Why the name is awkward
+The pipeline is natural: polynomials give the objects, lenses give the
+morphisms, the Int construction gives feedback, and string diagrams give the
+user-facing notation.  There is no point in the chain where you would rather
+leave string diagrams behind — the pictures are the syntax.
 
-`circuits-int` names only the middle layer.  The point of the library is not
-the Int construction by itself; the point is that polynomials give you the
-objects, lenses give you the morphisms, the Int construction gives you the
-compact-closed feedback structure, and string diagrams give you the
-user-facing notation.  If we were naming it today we might call it
-`circuits-poly` or `circuits-diagram`, because Poly and the diagram syntax are
-the entry points, while Int is the engine underneath.
+(Dependent types are different.  If we put dependent types here we would also
+leave strings, because dependent types want explicit indices and proof terms,
+not wire-and-box pictures.  This library stays in the polynomial/string
+world.)
 
-For now the package keeps the old name to avoid churn downstream, but think
-of it as:
+## Why `circuits-poly`
+
+`circuits-int` named only the middle engine.  Poly is the main eigenvector of
+the decomposition: everything else is an elaboration of polynomial interfaces
+and the lenses between them.  The package is now `circuits-poly`.
 
 ```
-circuits-int  =  Polynomial interfaces  +  Dependent lenses  +  Int corridor  +  String diagrams
+circuits-poly  =  Polynomial interfaces
+                +  Dependent lenses
+                +  Int corridor
+                +  String diagrams
 ```
 
 ## A quick diagram
 
-```
+```haskell
 -- feedback loop around a box f
 knotTrace :: SDiagram
 knotTrace =
@@ -93,7 +109,7 @@ calculation.  The picture tells you what the linear algebra is doing.
 
 - `circuits` — the base category language: `Category`, `Tensor`, `Channel`,
   `Traced`, `CopyDiscard`, `MergeZero`.
-- `circuits-int` — this package: polynomial lenses, the Int corridor, and the
+- `circuits-poly` — this package: polynomial lenses, the Int corridor, and the
   string-diagram surface syntax.
 - `strings-svg` — renders the `SDiagram` sketches as SVG equality galleries.
 - `circuits-ad`, `mealy` — concrete interpretations of lenses as automatic

@@ -19,7 +19,7 @@
 -- That lets us interpret a diagram either as an executable 'IntMorph' (via
 -- 'runDiagram') or as an untyped drawing skeleton (via 'skeleton') for a
 -- renderer such as @chart-svg@.
-module Circuit.Int.StringDiagram
+module Circuit.Poly.StringDiagram
   ( -- * String-diagram vocabulary
     Wire,
     Diagram,
@@ -50,8 +50,8 @@ module Circuit.Int.StringDiagram
 where
 
 import Circuit.Category qualified as Cat
-import Circuit.Int (IN, IntMorph (..))
-import Circuit.Int qualified as Int
+import Circuit.Poly.Int (IN, IntMorph (..))
+import Circuit.Poly.Int qualified as Int
 import Circuit.Layer (run)
 import Circuit.Loop (Loop (..))
 import Circuit.Poly (Mono, Morphism, applyLens)

@@ -17,7 +17,7 @@
 --
 -- This module uses only the 'Loop'/'Channel' surface and introduces no
 -- new dependencies.
-module Circuit.Int
+module Circuit.Poly.Int
   ( -- * Int objects and morphisms
     IN,
     IntMorph (..),
