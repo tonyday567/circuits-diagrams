@@ -30,6 +30,7 @@ module Circuit.Int.StringDiagram
     assoc,
     assoc',
     swap,
+    prismBox,
 
     -- * Running a diagram
     runDiagram,
@@ -64,6 +65,21 @@ wire = IntMorph (Lift M.swap)
 -- | A box built from a causal dependent lens.
 box :: Morphism (Mono a da) (Mono b db) -> Diagram a da b db
 box m = IntMorph (Lift (\(a, db) -> let (b, put) = applyLens m a in (put db, b)))
+
+-- | A prism box: partial access to a sum-shaped position.
+--
+-- Forward pass @match :: s -> Either a s@; backward pass uses @build :: a -> s@
+-- on the matched branch and the identity on the unmatched branch.  Directions
+-- are identified with positions, the natural reading for set-valued
+-- polynomials.
+prismBox ::
+  (s -> Either a s) ->
+  (a -> s) ->
+  Diagram s s (Either a s) (Either a s)
+prismBox match build = IntMorph (Lift (\(s, e) ->
+  case e of
+    Left a -> (build a, match s)
+    Right s' -> (s', match s)))
 
 -- | Place two diagrams side by side (tensor product).
 beside ::

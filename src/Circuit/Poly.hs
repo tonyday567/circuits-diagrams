@@ -84,6 +84,10 @@ module Circuit.Poly
     dagger,
     applyLens,
 
+    -- * Prisms
+    prism,
+    prismMatch,
+
     -- * Dynamical systems
     System,
     step,
@@ -522,6 +526,16 @@ data Morphism (p :: Poly) (q :: Poly) where
     Morphism (Mono a da) (Mono b db) ->
     Morphism (Mono c dc) (Mono d dd) ->
     Morphism ('Comp (Mono a da) (Mono c dc)) ('Comp (Mono b db) (Mono d dd))
+  -- | Prism: a co-lens that matches on a sum-like position.
+  --
+  -- Forward pass @match :: s -> Either a s@; backward pass on the matched
+  -- branch is @build :: a -> s@.  On the unmatched branch the backward pass
+  -- is the identity.  Directions are identified with positions, which is the
+  -- natural reading for set-valued polynomials.
+  Prism ::
+    (s -> Either a s) ->
+    (a -> s) ->
+    Morphism (Mono s s) ('Sum (Mono a a) (Mono s s))
 
 instance Category Morphism where
   type Ob Morphism a = ()
@@ -560,6 +574,10 @@ runMorphism = \case
   CompAssocL -> compAssocL
   CompAssocR -> compAssocR
   CompT m n -> compT m n
+  Prism match build -> \case
+    EP (EK s, EE k) -> case match s of
+      Left a -> ES (Left (EP (EK a, EE (k . build))))
+      Right s' -> ES (Right (EP (EK s', EE k)))
 
 -- ** Dirichlet tensor
 
@@ -692,6 +710,26 @@ dagger f g = Pair (Compose (ConstMap f) Fst) (Compose (ExpMap g) Snd)
 applyLens :: Morphism (Mono a da) (Mono b db) -> a -> (b, db -> da)
 applyLens m a = case runMorphism m (EP (EK a, EE id)) of
   EP (EK b, EE g) -> (b, g)
+
+-- | Prism: match on a sum-like source, build from the focused branch.
+--
+-- >>> let p = prism (\case Left n -> Left n; Right s -> Right (Right s)) Left :: Morphism (Mono (Either Int String) (Either Int String)) ('Sum (Mono Int Int) (Mono (Either Int String) (Either Int String)))
+-- >>> case runMorphism p (EP (EK (Left 7), EE id)) of ES (Left (EP (EK n, EE k))) -> (n, k 1)
+-- (7,Left 1)
+prism ::
+  (s -> Either a s) ->
+  (a -> s) ->
+  Morphism (Mono s s) ('Sum (Mono a a) (Mono s s))
+prism = Prism
+
+-- | Extract the forward match of a prism.
+prismMatch ::
+  Morphism (Mono s s) ('Sum (Mono a a) (Mono s s)) ->
+  s ->
+  Either a s
+prismMatch p s = case runMorphism p (EP (EK s, EE id)) of
+  ES (Left (EP (EK a, _))) -> Left a
+  ES (Right (EP (EK s', _))) -> Right s'
 
 -- | A dynamical system with interface @p@ and state type @s@.
 --

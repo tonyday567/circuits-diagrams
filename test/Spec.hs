@@ -19,6 +19,7 @@ import Circuit.Int.StringDiagram
     bend',
     beside,
     box,
+    prismBox,
     runDiagram,
     swap,
     thenD,
@@ -487,5 +488,45 @@ main = do
     assert "assoc . assoc' = id" $
       runDiagram (assoc' `thenD` assoc) (((1 :: Int, "a"), True), ((2 :: Int, "b"), False))
         == (((2, "b"), False), ((1, "a"), True))
+
+  ----------------------------------------------------------------------
+  -- Phase 7: profunctor optics — prisms
+  ----------------------------------------------------------------------
+  putStrLn "Phase 7: profunctor optics — prisms"
+  do
+    -- Prism on Either Int String that focuses on the Left branch.
+    let match :: Either Int String -> Either Int (Either Int String)
+        match = \case Left n -> Left n; Right s -> Right (Right s)
+        build :: Int -> Either Int String
+        build = Left
+        p ::
+          Morphism
+            (Mono (Either Int String) (Either Int String))
+            ('Sum (Mono Int Int) (Mono (Either Int String) (Either Int String)))
+        p = prism match build
+    assert "prism build-match: match (build a) == Left a" $
+      prismMatch p (build 7) == Left (7 :: Int)
+    assert "prism match-build: either build identity (prismMatch p s) == s" $
+      all
+        (\s -> either build (\x -> x) (prismMatch p s) == s)
+        [Left 7 :: Either Int String, Right "hello"]
+
+  do
+    -- The same prism as a string-diagram box.
+    let match = \case Left n -> Left n; Right s -> Right (Right s) :: Either Int (Either Int String)
+        build = Left :: Int -> Either Int String
+        pb = prismBox match build
+    -- Build, then match: forward output is the focused branch.
+    assert "prismBox build then match" $
+      runDiagram pb (build 7, Right (Right "x"))
+        == (Right "x", Left 7 :: Either Int (Either Int String))
+    -- Unmatched branch round-trips through the diagram.
+    assert "prismBox unmatched round-trip" $
+      runDiagram pb (Right "hi" :: Either Int String, Right (Right "hi"))
+        == (Right "hi", Right (Right "hi"))
+    -- Matched branch update: backward input replaces the focus.
+    assert "prismBox matched update" $
+      runDiagram pb (Left 7 :: Either Int String, Left 8)
+        == (Left 8, Left 7)
 
   putStrLn "All tests passed"
