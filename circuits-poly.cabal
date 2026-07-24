@@ -63,13 +63,11 @@ library
     Circuit.Poly.StringDiagram
     Circuit.Poly
     Circuit.Poly.DiffP
-    Circuit.Poly.Mealy
 
   build-depends:
     base >=4.18 && <5,
     circuits >=0.3 && <0.4,
     circuits-ad >=0.1 && <0.2,
-    mealy >=0.5 && <0.6,
 
 test-suite spec
   import: ghc-options-stanza
@@ -82,6 +80,5 @@ test-suite spec
     circuits >=0.3 && <0.4,
     circuits-poly,
     circuits-ad,
-    mealy,
     numhask,
   default-language: GHC2024

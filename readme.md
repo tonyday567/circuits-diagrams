@@ -112,8 +112,8 @@ calculation.  The picture tells you what the linear algebra is doing.
 - `circuits-poly` — this package: polynomial lenses, the Int corridor, and the
   string-diagram surface syntax.
 - `strings-svg` — renders the `SDiagram` sketches as SVG equality galleries.
-- `circuits-ad`, `mealy` — concrete interpretations of lenses as automatic
-  differentiation and state machines.
+- `circuits-ad` — automatic differentiation for lenses.
+- `circuits-mealy` — bridge from polynomial systems to `Data.Mealy` machines.
 
 ## Status
 

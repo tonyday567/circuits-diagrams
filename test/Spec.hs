@@ -33,8 +33,6 @@ import Circuit.Poly.StringDiagram
     unitR',
     wire,
   )
-import Circuit.Poly.Mealy (duplicateSystem, iterateSystem, runSystem, systemAsMealy)
-import Data.Mealy (scan)
 import Data.Void (absurd)
 import Prelude hiding (id, (.))
 import System.Exit (exitFailure)
@@ -263,25 +261,7 @@ main = do
       all (\(x, y) -> abs (x - y) < 1e-10) (zip trajectory expected)
 
   ----------------------------------------------------------------------
-  -- Phase 3: Mealy integration
-  ----------------------------------------------------------------------
-  putStrLn "Phase 3: Mealy integration"
-  do
-    -- A polynomial system that sums its inputs.
-    let sumSystem :: System Int (Mono Int Int)
-        sumSystem s = EP (EK s, EE (\o -> s + o))
-        sumMealy = systemAsMealy sumSystem 0
-    assert "systemAsMealy sum" $ scan sumMealy [1, 2, 3, 4] == [1, 3, 6, 10]
-
-  do
-    -- A polynomial system that counts inputs.
-    let countSystem :: System Int (Mono Int ())
-        countSystem s = EP (EK s, EE (\() -> s + 1))
-        countMealy = systemAsMealy countSystem 0
-    assert "systemAsMealy count" $ scan countMealy [(), (), ()] == [1, 2, 3]
-
-  ----------------------------------------------------------------------
-  -- Phase 4: composition product monoidal structure
+  -- Phase 3: composition product monoidal structure
   ----------------------------------------------------------------------
   putStrLn "Phase 4: composition product monoidal structure"
   do
@@ -383,37 +363,9 @@ main = do
            in b == 2 && d == 5 * 2 - 2 + 10 && k (Right 5, Right 7) == 5 + 7 - 11
 
   ----------------------------------------------------------------------
-  -- Phase 5: Move E — multi-step dynamics / comultiplication
+  -- Phase 4: string diagrams over the Int corridor
   ----------------------------------------------------------------------
-  putStrLn "Phase 5: multi-step dynamics / comultiplication"
-  do
-    -- Direct coalgebra iteration agrees with the Mealy scan.
-    let sumSystem :: System Int (Mono Int Int)
-        sumSystem s = EP (EK s, EE (\o -> s + o))
-    assert "iterateSystem sum" $ iterateSystem sumSystem 0 [1, 2, 3, 4] == [1, 3, 6, 10]
-
-  do
-    let countSystem :: System Int (Mono Int ())
-        countSystem s = EP (EK s, EE (\() -> s + 1))
-    assert "iterateSystem count" $ iterateSystem countSystem 0 [(), (), ()] == [1, 2, 3]
-
-  do
-    -- Comultiplication for an observable system: two steps over Comp p p.
-    let sumSystem :: System Int (Mono Int Int)
-        sumSystem s = EP (EK s, EE (\o -> s + o))
-    assert "duplicateSystem sum" $
-      case duplicateSystem sumSystem 0 of
-        EC ((s, ()), hang) k ->
-          s == 0
-            && hang (Right 1) == (1, ())
-            && hang (Right 5) == (5, ())
-            && k (Right 1, Right 2) == 3
-            && k (Right 10, Right 20) == 30
-
-  ----------------------------------------------------------------------
-  -- Phase 6: string diagrams over the Int corridor
-  ----------------------------------------------------------------------
-  putStrLn "Phase 6: string diagrams over the Int corridor"
+  putStrLn "Phase 4: string diagrams over the Int corridor"
   do
     -- A straight wire swaps the Int factors.
     assert "wire" $ runDiagram wire (1 :: Int, 2 :: Int) == (2, 1)
@@ -507,9 +459,9 @@ main = do
     assert "skeleton swap" $ skeleton swap == SSwap
 
   ----------------------------------------------------------------------
-  -- Phase 7: profunctor optics — prisms
+  -- Phase 5: profunctor optics — prisms
   ----------------------------------------------------------------------
-  putStrLn "Phase 7: profunctor optics — prisms"
+  putStrLn "Phase 5: profunctor optics — prisms"
   do
     -- Prism on Either Int String that focuses on the Left branch.
     let match :: Either Int String -> Either Int (Either Int String)
