@@ -13,14 +13,17 @@ import Circuit.Poly.DiffP
   )
 import Circuit.Int.StringDiagram
   ( Diagram,
+    SDiagram (..),
     assoc,
     assoc',
     bend,
     bend',
     beside,
     box,
+    boxLabelled,
     prismBox,
     runDiagram,
+    skeleton,
     swap,
     thenD,
     turn,
@@ -488,6 +491,20 @@ main = do
     assert "assoc . assoc' = id" $
       runDiagram (assoc' `thenD` assoc) (((1 :: Int, "a"), True), ((2 :: Int, "b"), False))
         == (((2, "b"), False), ((1, "a"), True))
+
+  do
+    -- The DSL is a deep embedding: skeleton extracts the drawing syntax.
+    let f = lens (+ 1) (\_ d -> d - 1) :: Morphism (Mono Int Int) (Mono Int Int)
+    assert "skeleton wire" $ skeleton wire == SWire
+    assert "skeleton box" $ skeleton (box f) == SBox "box"
+    assert "skeleton labelled box" $ skeleton (boxLabelled "f" f) == SBox "f"
+    assert "skeleton beside" $
+      skeleton (beside (box f) wire) == SBeside (SBox "box") SWire
+    assert "skeleton thenD" $
+      skeleton (box f `thenD` box f) == SThenD (SBox "box") (SBox "box")
+    assert "skeleton bend/bend'" $
+      skeleton bend == SBend && skeleton bend' == SBend'
+    assert "skeleton swap" $ skeleton swap == SSwap
 
   ----------------------------------------------------------------------
   -- Phase 7: profunctor optics — prisms
