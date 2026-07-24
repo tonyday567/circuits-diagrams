@@ -11,7 +11,7 @@ import Circuit.Poly.DiffP
     diffPFromFamily,
     diffPParamGrad,
   )
-import Circuit.Poly.Mealy (systemAsMealy)
+import Circuit.Poly.Mealy (duplicateSystem, iterateSystem, runSystem, systemAsMealy)
 import Data.Mealy (scan)
 import Data.Void (absurd)
 import Prelude hiding (id, (.))
@@ -359,5 +359,33 @@ main = do
         EC ((b, ()), hang) k ->
           let (d, ()) = hang (Right 5)
            in b == 2 && d == 5 * 2 - 2 + 10 && k (Right 5, Right 7) == 5 + 7 - 11
+
+  ----------------------------------------------------------------------
+  -- Phase 5: Move E — multi-step dynamics / comultiplication
+  ----------------------------------------------------------------------
+  putStrLn "Phase 5: multi-step dynamics / comultiplication"
+  do
+    -- Direct coalgebra iteration agrees with the Mealy scan.
+    let sumSystem :: System Int (Mono Int Int)
+        sumSystem s = EP (EK s, EE (\o -> s + o))
+    assert "iterateSystem sum" $ iterateSystem sumSystem 0 [1, 2, 3, 4] == [1, 3, 6, 10]
+
+  do
+    let countSystem :: System Int (Mono Int ())
+        countSystem s = EP (EK s, EE (\() -> s + 1))
+    assert "iterateSystem count" $ iterateSystem countSystem 0 [(), (), ()] == [1, 2, 3]
+
+  do
+    -- Comultiplication for an observable system: two steps over Comp p p.
+    let sumSystem :: System Int (Mono Int Int)
+        sumSystem s = EP (EK s, EE (\o -> s + o))
+    assert "duplicateSystem sum" $
+      case duplicateSystem sumSystem 0 of
+        EC ((s, ()), hang) k ->
+          s == 0
+            && hang (Right 1) == (1, ())
+            && hang (Right 5) == (5, ())
+            && k (Right 1, Right 2) == 3
+            && k (Right 10, Right 20) == 30
 
   putStrLn "All tests passed"
