@@ -38,8 +38,13 @@ module Circuit.Int
     cap,
     cup,
     unitL,
+    unitL',
+    unitR,
     unitR',
+    tensorAssoc,
+    tensorAssoc',
     assocInv,
+    braid,
 
     -- * Bridge from Poly monomial lenses
     causal,
@@ -351,19 +356,27 @@ par (IntMorph f) (IntMorph g) = IntMorph (permOut . (f `M.par` g) . permIn)
 --
 -- The unit object is @IN () ()@; the cap produces the tensor @IN (a, b) (b, a)@.
 cap :: IntMorph (,) (->) () () (a, b) (b, a)
-cap = IntMorph $ \((), (b, a)) -> ((), (a, b))
+cap = IntMorph $ \ ~((), (b, a)) -> ((), (a, b))
 
 -- | Cup (unit elimination) for @Int(->)@ at object @IN a b@.
 cup :: IntMorph (,) (->) (b, a) (a, b) () ()
-cup = IntMorph $ \((b, a), ()) -> ((a, b), ())
+cup = IntMorph $ \ ~((b, a), ()) -> ((a, b), ())
 
 -- | Left-unitor for @Int(->)@: @I \u2297 A -> A@.
 unitL :: IntMorph (,) (->) ((), a) ((), b) a b
-unitL = IntMorph $ \(((), a), b) -> (((), b), a)
+unitL = IntMorph $ \ ~(((), a), b) -> (((), b), a)
 
 -- | Inverse left-unitor for @Int(->)@: @A -> I \u2297 A@.
 unitR' :: IntMorph (,) (->) a b (a, ()) (b, ())
-unitR' = IntMorph $ \(a, (b, ())) -> (b, (a, ()))
+unitR' = IntMorph $ \ ~(a, (b, ())) -> (b, (a, ()))
+
+-- | Inverse left-unitor for @Int(->)@: @A -> I \u2297 A@.
+unitL' :: IntMorph (,) (->) a b ((), a) ((), b)
+unitL' = IntMorph $ \ ~(a, ((), b)) -> (b, ((), a))
+
+-- | Right-unitor for @Int(->)@: @A \u2297 I -> A@.
+unitR :: IntMorph (,) (->) (a, ()) (b, ()) a b
+unitR = IntMorph $ \ ~((a, ()), b) -> ((b, ()), a)
 
 -- | Inverse associator used in the left yanking equation for @IN a b@.
 assocInv ::
@@ -374,7 +387,40 @@ assocInv ::
     (b, (a, b))
     ((a, b), a)
     ((b, a), b)
-assocInv = IntMorph $ \((x, (y, x')), ((y', x''), y'')) -> ((y', (x'', y'')), ((x, y), x'))
+assocInv = IntMorph $ \ ~((x, (y, x')), ((y', x''), y'')) -> ((y', (x'', y'')), ((x, y), x'))
+
+-- | Associator for @Int(->)@: @A \u2297 (B \u2297 C) -> (A \u2297 B) \u2297 C@.
+tensorAssoc ::
+  IntMorph
+    (,)
+    (->)
+    (a, (b, c))
+    (da, (db, dc))
+    ((a, b), c)
+    ((da, db), dc)
+tensorAssoc = IntMorph $ \ ~((x, (y, z)), ((dx, dy), dz)) -> ((dx, (dy, dz)), ((x, y), z))
+
+-- | Inverse associator for @Int(->)@: @(A \u2297 B) \u2297 C -> A \u2297 (B \u2297 C)@.
+tensorAssoc' ::
+  IntMorph
+    (,)
+    (->)
+    ((a, b), c)
+    ((da, db), dc)
+    (a, (b, c))
+    (da, (db, dc))
+tensorAssoc' = IntMorph $ \ ~(((x, y), z), (dx, (dy, dz))) -> (((dx, dy), dz), (x, (y, z)))
+
+-- | Symmetric braiding for @Int(->)@: @A \u2297 B -> B \u2297 A@.
+braid ::
+  IntMorph
+    (,)
+    (->)
+    (a, b)
+    (da, db)
+    (b, a)
+    (db, da)
+braid = IntMorph $ \ ~((x, y), (dy, dx)) -> ((dx, dy), (y, x))
 
 -- | Yanking witness.  In the Int construction the identity is the swap on
 -- the two factors; tracing that swap over the Either tensor returns the

@@ -11,7 +11,24 @@ import Circuit.Poly.DiffP
     diffPFromFamily,
     diffPParamGrad,
   )
-import Circuit.Int.StringDiagram (Diagram, bend, bend', beside, box, runDiagram, thenD, turn, wire)
+import Circuit.Int.StringDiagram
+  ( Diagram,
+    assoc,
+    assoc',
+    bend,
+    bend',
+    beside,
+    box,
+    runDiagram,
+    swap,
+    thenD,
+    turn,
+    unitL,
+    unitL',
+    unitR,
+    unitR',
+    wire,
+  )
 import Circuit.Poly.Mealy (duplicateSystem, iterateSystem, runSystem, systemAsMealy)
 import Data.Mealy (scan)
 import Data.Void (absurd)
@@ -429,5 +446,46 @@ main = do
     assert "turn + feedback" $
       runDiagram (box transLens1 `thenD` turn (box transLens1)) (5 :: Int, 7 :: Int)
         == runDiagram wire (5, 7)
+
+  do
+    -- Left yanking equation for the dual object A*:
+    --   unitL . (cup \tensor id_{A*}) . assoc . (id_{A*} \tensor cap) . unitR' = id_{A*}
+    -- Use A = IN Int String so A and A* are distinguishable at the type level.
+    let leftYank :: Diagram String Int String Int
+        leftYank =
+          unitR'
+            `thenD` ((wire :: Diagram String Int String Int) `beside` bend')
+            `thenD` assoc
+            `thenD` (bend `beside` (wire :: Diagram String Int String Int))
+            `thenD` unitL
+    assert "left yanking" $
+      runDiagram leftYank ("hello", 42 :: Int)
+        == runDiagram (wire :: Diagram String Int String Int) ("hello", 42)
+
+  do
+    -- Right yanking equation for A:
+    --   unitR . (id_A \tensor cup) . assoc' . (cap \tensor id_A) . unitL' = id_A
+    let rightYank :: Diagram Int String Int String
+        rightYank =
+          unitL'
+            `thenD` (bend' `beside` (wire :: Diagram Int String Int String))
+            `thenD` assoc'
+            `thenD` ((wire :: Diagram Int String Int String) `beside` bend)
+            `thenD` unitR
+    assert "right yanking" $
+      runDiagram rightYank (42 :: Int, "hello")
+        == runDiagram (wire :: Diagram Int String Int String) (42, "hello")
+
+  do
+    -- Braiding is self-inverse and swaps the two wires.
+    assert "braiding self-inverse" $
+      runDiagram (swap `thenD` swap) ((1 :: Int, "a"), (2 :: Int, "b"))
+        == ((2, "b"), (1, "a"))
+
+  do
+    -- Associator round-trip.
+    assert "assoc . assoc' = id" $
+      runDiagram (assoc' `thenD` assoc) (((1 :: Int, "a"), True), ((2 :: Int, "b"), False))
+        == (((2, "b"), False), ((1, "a"), True))
 
   putStrLn "All tests passed"

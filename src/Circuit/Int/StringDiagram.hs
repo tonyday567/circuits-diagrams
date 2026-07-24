@@ -23,6 +23,13 @@ module Circuit.Int.StringDiagram
     bend,
     bend',
     turn,
+    unitL,
+    unitL',
+    unitR,
+    unitR',
+    assoc,
+    assoc',
+    swap,
 
     -- * Running a diagram
     runDiagram,
@@ -96,6 +103,37 @@ bend = IntMorph (Lift (\((da, a), ()) -> ((a, da), ())))
 -- | Turn a diagram around: dual in the compact closed sense.
 turn :: Diagram a da b db -> Diagram db b da a
 turn (IntMorph f) = IntMorph (Lift M.swap Cat.. f Cat.. Lift M.swap)
+
+-- | Left unitor: @I \u2297 A -> A@.
+unitL :: Diagram ((), a) ((), da) a da
+unitL = IntMorph (Lift (runIntMorph Int.unitL))
+
+-- | Inverse left unitor: @A -> I \u2297 A@.
+unitL' :: Diagram a da ((), a) ((), da)
+unitL' = IntMorph (Lift (runIntMorph Int.unitL'))
+
+-- | Right unitor: @A \u2297 I -> A@.
+unitR :: Diagram (a, ()) (da, ()) a da
+unitR = IntMorph (Lift (runIntMorph Int.unitR))
+
+-- | Inverse right unitor: @A -> A \u2297 I@.
+unitR' :: Diagram a da (a, ()) (da, ())
+unitR' = IntMorph (Lift (runIntMorph Int.unitR'))
+
+-- | Associator: @A \u2297 (B \u2297 C) -> (A \u2297 B) \u2297 C@.
+assoc ::
+  Diagram (a, (b, c)) (da, (db, dc)) ((a, b), c) ((da, db), dc)
+assoc = IntMorph (Lift (runIntMorph Int.tensorAssoc))
+
+-- | Inverse associator: @(A \u2297 B) \u2297 C -> A \u2297 (B \u2297 C)@.
+assoc' ::
+  Diagram ((a, b), c) ((da, db), dc) (a, (b, c)) (da, (db, dc))
+assoc' = IntMorph (Lift (runIntMorph Int.tensorAssoc'))
+
+-- | Symmetric braiding: @A \u2297 B -> B \u2297 A@.
+swap ::
+  Diagram (a, b) (da, db) (b, a) (db, da)
+swap = IntMorph (Lift (runIntMorph Int.braid))
 
 -- | Run a closed string diagram on a concrete input.
 --
