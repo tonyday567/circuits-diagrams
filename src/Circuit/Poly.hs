@@ -63,6 +63,12 @@ module Circuit.Poly
     -- * Composition product
     nestedToComp,
     compToNested,
+    compUnitorL,
+    compUnitorL',
+    compUnitorR,
+    compUnitorR',
+    compAssocL,
+    compAssocR,
 
     -- * Tensor wiring
     tensorEval,
@@ -292,6 +298,69 @@ compToNested :: (Netlist p, Netlist q) => Eval ('Comp p q) x -> Eval p (Eval q x
 compToNested (EC (i, hang) k) =
   fromNet i (\dp -> fromNet (hang dp) (\dq -> k (dp, dq)))
 
+-- | Left unitor for the composition product: @Y ◁ p -> p@.
+compUnitorL :: Netlist p => Eval ('Comp 'Y p) x -> Eval p x
+compUnitorL (EC ((), hang) k) =
+  fromNet (hang ()) (\dp -> k ((), dp))
+
+-- | Inverse left unitor for the composition product: @p -> Y ◁ p@.
+compUnitorL' :: Netlist p => Eval p x -> Eval ('Comp 'Y p) x
+compUnitorL' v =
+  let (i, k) = toNet v
+   in EC ((), const i) (\((), dp) -> k dp)
+
+-- | Right unitor for the composition product: @p ◁ Y -> p@.
+compUnitorR :: Netlist p => Eval ('Comp p 'Y) x -> Eval p x
+compUnitorR (EC (i, _) k) =
+  fromNet i (\dp -> k (dp, ()))
+
+-- | Inverse right unitor for the composition product: @p -> p ◁ Y@.
+compUnitorR' :: Netlist p => Eval p x -> Eval ('Comp p 'Y) x
+compUnitorR' v =
+  let (i, k) = toNet v
+   in EC (i, const ()) (\(dp, ()) -> k dp)
+
+-- | Left associator for the composition product:
+-- @((p ◁ q) ◁ r) -> (p ◁ (q ◁ r))@.
+compAssocL :: Eval ('Comp ('Comp p q) r) x -> Eval ('Comp p ('Comp q r)) x
+compAssocL (EC ((i, f), g) k) =
+  EC
+    ( i,
+      \dp ->
+        let j = f dp
+            h = \dq -> g (dp, dq)
+         in (j, h)
+    )
+    (\(dp, (dq, dr)) -> k ((dp, dq), dr))
+
+-- | Right associator for the composition product.
+compAssocR :: Eval ('Comp p ('Comp q r)) x -> Eval ('Comp ('Comp p q) r) x
+compAssocR (EC (i, h) k) =
+  let f = \dp -> fst (h dp)
+      g = \(dp, dq) -> snd (h dp) dq
+   in EC ((i, f), g) (\((dp, dq), dr) -> k (dp, (dq, dr)))
+
+-- | Functorial action of the composition product on monomial morphisms.
+compT ::
+  Morphism (Mono a da) (Mono b db) ->
+  Morphism (Mono c dc) (Mono d dd) ->
+  Eval ('Comp (Mono a da) (Mono c dc)) x ->
+  Eval ('Comp (Mono b db) (Mono d dd)) x
+compT f g (EC (aPos, hang) k) =
+  let ((bPos, ()), fBw) = morphAt f aPos
+      newHang db =
+        let da = fBw db
+            cPos = hang da
+            (dPos, _) = morphAt g cPos
+         in dPos
+      newK (db, dd) =
+        let da = fBw db
+            cPos = hang da
+            (_, gBw) = morphAt g cPos
+            dc = gBw dd
+         in k (da, dc)
+   in EC ((bPos, ()), newHang) newK
+
 -- | Pair two polynomial values into a Dirichlet tensor (@p ⊗ q@).
 --
 -- Each factor contributes its position and pin assignment; the result is
@@ -432,6 +501,27 @@ data Morphism (p :: Poly) (q :: Poly) where
     Morphism (Mono a da) (Mono b db) ->
     Morphism (Mono c dc) (Mono d dd) ->
     Morphism ('Tensor (Mono a da) (Mono c dc)) ('Tensor (Mono b db) (Mono d dd))
+  -- | Left unitor for the composition product: @Y ◁ p ≅ p@.
+  CompUnitL :: Netlist p => Morphism ('Comp 'Y p) p
+  -- | Inverse left unitor for the composition product.
+  CompUnitL' :: Netlist p => Morphism p ('Comp 'Y p)
+  -- | Right unitor for the composition product: @p ◁ Y ≅ p@.
+  CompUnitR :: Netlist p => Morphism ('Comp p 'Y) p
+  -- | Inverse right unitor for the composition product.
+  CompUnitR' :: Netlist p => Morphism p ('Comp p 'Y)
+  -- | Left associator for the composition product:
+  -- @((p ◁ q) ◁ r) -> (p ◁ (q ◁ r))@.
+  CompAssocL :: Morphism ('Comp ('Comp p q) r) ('Comp p ('Comp q r))
+  -- | Right associator for the composition product.
+  CompAssocR :: Morphism ('Comp p ('Comp q r)) ('Comp ('Comp p q) r)
+  -- | Functorial action of the composition product on monomial morphisms:
+  -- @f ◁ g : (a·y^{da}) ◁ (c·y^{dc}) -> (b·y^{db}) ◁ (d·y^{dd})@.
+  --
+  -- Restricted to monomials for the same reason as 'ParT'.
+  CompT ::
+    Morphism (Mono a da) (Mono b db) ->
+    Morphism (Mono c dc) (Mono d dd) ->
+    Morphism ('Comp (Mono a da) (Mono c dc)) ('Comp (Mono b db) (Mono d dd))
 
 instance Category Morphism where
   type Ob Morphism a = ()
@@ -463,6 +553,13 @@ runMorphism = \case
   TensorBraid -> \(ET (pp, pq) f) ->
     ET (pq, pp) (f . (\(dq, dp) -> (dp, dq)))
   ParT m n -> parT m n
+  CompUnitL -> compUnitorL
+  CompUnitL' -> compUnitorL'
+  CompUnitR -> compUnitorR
+  CompUnitR' -> compUnitorR'
+  CompAssocL -> compAssocL
+  CompAssocR -> compAssocR
+  CompT m n -> compT m n
 
 -- ** Dirichlet tensor
 

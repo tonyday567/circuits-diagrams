@@ -13,6 +13,7 @@ import Circuit.Poly.DiffP
   )
 import Circuit.Poly.Mealy (systemAsMealy)
 import Data.Mealy (scan)
+import Data.Void (absurd)
 import Prelude hiding (id, (.))
 import System.Exit (exitFailure)
 
@@ -256,5 +257,107 @@ main = do
         countSystem s = EP (EK s, EE (\() -> s + 1))
         countMealy = systemAsMealy countSystem 0
     assert "systemAsMealy count" $ scan countMealy [(), (), ()] == [1, 2, 3]
+
+  ----------------------------------------------------------------------
+  -- Phase 4: composition product monoidal structure
+  ----------------------------------------------------------------------
+  putStrLn "Phase 4: composition product monoidal structure"
+  do
+    -- Left unitor Y ◁ p ≅ p, tested on a monomial.
+    let mono = EP (EK 5, EE (\dn -> show dn ++ "!")) :: Eval (Mono Int Int) String
+    assert "compUnitorL . compUnitorL'" $
+      case runMorphism CompUnitL (runMorphism CompUnitL' mono) of
+        EP (EK n, EE f) -> n == 5 && f 7 == "7!" && f 42 == "42!"
+
+  do
+    -- Other direction: CompUnitL' . CompUnitL preserves the CompUnitL image.
+    let compYMono :: Eval ('Comp 'Y (Mono Int Int)) String
+        compYMono =
+          EC ((), \_ -> (5, ()))
+            (\case ((), Right n) -> show n ++ "!"; ((), Left v) -> absurd v)
+        mono = runMorphism CompUnitL compYMono
+        compYMono' = runMorphism CompUnitL' mono
+        mono' = runMorphism CompUnitL compYMono'
+    assert "compUnitorL' . compUnitorL (via CompUnitL)" $
+      case (mono, mono') of
+        (EP (EK n, EE f), EP (EK n', EE f')) ->
+          n == n' && f 7 == f' 7 && f 42 == f' 42
+
+  do
+    -- Right unitor p ◁ Y ≅ p, tested on a monomial.
+    let mono = EP (EK 7, EE (\dn -> dn * 2)) :: Eval (Mono Int Int) Int
+    assert "compUnitorR . compUnitorR'" $
+      case runMorphism CompUnitR (runMorphism CompUnitR' mono) of
+        EP (EK n, EE f) -> n == 7 && f 3 == 6 && f 10 == 20
+
+  do
+    -- Other direction: CompUnitR' . CompUnitR preserves the CompUnitR image.
+    let compMonoY :: Eval ('Comp (Mono Int Int) 'Y) Int
+        compMonoY =
+          EC ((3, ()), \_ -> ())
+            (\case (Right n, ()) -> n * 3; (Left v, ()) -> absurd v)
+        mono = runMorphism CompUnitR compMonoY
+        compMonoY' = runMorphism CompUnitR' mono
+        mono' = runMorphism CompUnitR compMonoY'
+    assert "compUnitorR' . compUnitorR (via CompUnitR)" $
+      case (mono, mono') of
+        (EP (EK n, EE f), EP (EK n', EE f')) ->
+          n == n' && f 3 == f' 3 && f 10 == f' 10
+
+  do
+    -- Associator round-trip on the left-associated side.
+    let compLeft :: Eval ('Comp ('Comp (Mono Int Int) (Mono Int Int)) (Mono Int Int)) String
+        compLeft =
+          EC
+            ( ((5, ()), \case Right n -> (n + 1, ()); Left v -> absurd v),
+              \case (Right n, Right m) -> (n + m, ()); _ -> (0, ())
+            )
+            (\case ((Right n, Right m), Right o) -> show (n + m + o); _ -> "bad")
+        compLeftRound = runMorphism CompAssocR (runMorphism CompAssocL compLeft)
+        result = runMorphism CompAssocL compLeft
+        result' = runMorphism CompAssocL compLeftRound
+    assert "compAssocR . compAssocL (via CompAssocL)" $
+      case (result, result') of
+        (EC (i, h) k, EC (i', h') k') ->
+          let posEq = i == i' && all (\n -> fst (h (Right n)) == fst (h' (Right n))) [1, 2, 3]
+              hangEq = all (\(n, m) -> snd (h (Right n)) (Right m) == snd (h' (Right n)) (Right m)) [(n, m) | n <- [1, 2], m <- [3, 4]]
+              dirEq = all (\(n, m, o) -> k (Right n, (Right m, Right o)) == k' (Right n, (Right m, Right o))) [(n, m, o) | n <- [1, 2], m <- [3, 4], o <- [5, 6]]
+           in posEq && hangEq && dirEq
+
+  do
+    -- Associator round-trip on the right-associated side.
+    let compRight :: Eval ('Comp (Mono Int Int) ('Comp (Mono Int Int) (Mono Int Int))) String
+        compRight =
+          EC
+            ( (5, ()),
+              \case
+                Right n -> ((n + 1, ()), \case Right m -> (n + m, ()); Left v -> absurd v)
+                Left v -> absurd v
+            )
+            (\case (Right n, (Right m, Right o)) -> show (n + m + o); _ -> "bad")
+        compRightRound = runMorphism CompAssocL (runMorphism CompAssocR compRight)
+        result = runMorphism CompAssocR compRight
+        result' = runMorphism CompAssocR compRightRound
+    assert "compAssocL . compAssocR (via CompAssocR)" $
+      case (result, result') of
+        (EC ((i, f), g) k, EC ((i', f'), g') k') ->
+          let posEq = i == i' && all (\n -> f (Right n) == f' (Right n)) [1, 2, 3]
+              midEq = all (\(n, m) -> g (Right n, Right m) == g' (Right n, Right m)) [(n, m) | n <- [1, 2], m <- [3, 4]]
+              dirEq = all (\(n, m, o) -> k ((Right n, Right m), Right o) == k' ((Right n, Right m), Right o)) [(n, m, o) | n <- [1, 2], m <- [3, 4], o <- [5, 6]]
+           in posEq && midEq && dirEq
+
+  do
+    -- Functorial action of the composition product on monomial morphisms.
+    let compMono :: Eval ('Comp (Mono Int Int) (Mono Int Int)) Int
+        compMono =
+          EC
+            (((1, ()), \case Right n -> (n * 2, ()); Left v -> absurd v))
+            (\case (Right n, Right m) -> n + m; _ -> 0)
+        result = runMorphism (CompT transLens1 transLens2) compMono
+    assert "CompT functoriality" $
+      case result of
+        EC ((b, ()), hang) k ->
+          let (d, ()) = hang (Right 5)
+           in b == 2 && d == 5 * 2 - 2 + 10 && k (Right 5, Right 7) == 5 + 7 - 11
 
   putStrLn "All tests passed"
