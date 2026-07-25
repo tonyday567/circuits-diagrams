@@ -63,6 +63,7 @@ library
     Circuit.Poly.StringDiagram
     Circuit.Poly
     Circuit.Poly.DiffP
+    Circuit.Poly.Process
 
   build-depends:
     base >=4.18 && <5,

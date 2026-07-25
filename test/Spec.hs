@@ -11,6 +11,13 @@ import Circuit.Poly.DiffP
     diffPFromFamily,
     diffPParamGrad,
   )
+import Circuit.Poly.Process
+  ( duplicateSystem,
+    iterateSystem,
+    runSystem,
+    systemAsProcess,
+  )
+import Circuit.Process (scan)
 import Circuit.Poly.StringDiagram
   ( Diagram,
     SDiagram (..),
@@ -497,5 +504,43 @@ main = do
     assert "prismBox matched update" $
       runDiagram pb (Left 7 :: Either Int String, Left 8)
         == (Left 8, Left 7)
+
+  ----------------------------------------------------------------------
+  -- Phase 6: System / Process bridge
+  ----------------------------------------------------------------------
+  putStrLn "Phase 6: System / Process bridge"
+  do
+    let sumSystem :: System Int (Mono Int Int)
+        sumSystem s = EP (EK s, EE (\o -> s + o))
+        sumProcess = systemAsProcess sumSystem 0
+    assert "systemAsProcess sum" $ scan sumProcess [1, 2, 3, 4] == [1, 3, 6, 10]
+
+  do
+    let countSystem :: System Int (Mono Int ())
+        countSystem s = EP (EK s, EE (\() -> s + 1))
+        countProcess = systemAsProcess countSystem 0
+    assert "systemAsProcess count" $ scan countProcess [(), (), ()] == [1, 2, 3]
+
+  do
+    let sumSystem :: System Int (Mono Int Int)
+        sumSystem s = EP (EK s, EE (\o -> s + o))
+    assert "iterateSystem sum" $ iterateSystem sumSystem 0 [1, 2, 3, 4] == [1, 3, 6, 10]
+
+  do
+    let countSystem :: System Int (Mono Int ())
+        countSystem s = EP (EK s, EE (\() -> s + 1))
+    assert "iterateSystem count" $ iterateSystem countSystem 0 [(), (), ()] == [1, 2, 3]
+
+  do
+    let sumSystem :: System Int (Mono Int Int)
+        sumSystem s = EP (EK s, EE (\o -> s + o))
+    assert "duplicateSystem sum" $
+      case duplicateSystem sumSystem 0 of
+        EC ((s, ()), hang) k ->
+          s == 0
+            && hang (Right 1) == (1, ())
+            && hang (Right 5) == (5, ())
+            && k (Right 1, Right 2) == 3
+            && k (Right 10, Right 20) == 30
 
   putStrLn "All tests passed"
