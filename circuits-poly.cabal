@@ -70,12 +70,11 @@ library
     circuits >=0.3 && <0.4,
     circuits-ad >=0.1 && <0.2,
 
-test-suite spec
+executable circuits-poly-verify
   import: ghc-options-stanza
   import: ghc2024-stanza
-  type: exitcode-stdio-1.0
-  main-is: Spec.hs
-  hs-source-dirs: test
+  hs-source-dirs: app
+  main-is: verify.hs
   build-depends:
     base >=4.18 && <5,
     circuits >=0.3 && <0.4,

@@ -1,7 +1,7 @@
 packages:
   .
   ../circuits
-  ../circuits-diff
+  ../circuits-ad
   ../numhask/numhask.cabal
   ../numhask-diff/numhask-diff.cabal
   ../harpie/harpie.cabal
