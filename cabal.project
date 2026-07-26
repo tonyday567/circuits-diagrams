@@ -12,8 +12,7 @@ packages:
 write-ghc-environment-files: always
 
 allow-newer:
-  ad-delcont:base,
-  tdigest:base,
+  ad-delcont:base
 
 package ad-delcont
   tests: False
