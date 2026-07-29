@@ -1,9 +1,13 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- | Sketch: the category Poly.
 --
@@ -89,8 +93,13 @@ module Circuit.Poly
     prismMatch,
 
     -- * Dynamical systems
-    System,
+    System (..),
+    SystemEval (..),
     step,
+    fromEvalSystem,
+    toEvalSystem,
+    monoDir,
+    monoIn,
   )
 where
 
@@ -131,13 +140,12 @@ type family Pos (p :: Poly) :: Type where
 -- For a value of @p(x)@ at a given position, 'Dir p' is the domain of the
 -- function into @x@.
 --
--- There is no 'Dir ('Sum p q)' row: directions over a sum are
--- position-dependent. At 'Left i' the direction set is 'Dir p'; at 'Right j'
--- it is 'Dir q'. The 'ES' constructor records this correctly; a flattened
--- family would over-approximate and make 'ET' over a sum-containing tensor
--- unsound. This is the known representation fork: a position-indexed 'Dir'
--- family would be fully general, but is not needed for the monomial / wiring
--- fragment this package targets first.
+-- 'Sum' gets a /flat/ direction space @'Either' ('Dir' p) ('Dir' q)@.  This
+-- is an over-approximation: only the branch selected by the position is
+-- in-fibre.  It is nonetheless the right shape for /dynamics/, where the
+-- input direction is supplied after the position is observed: a wrong-branch
+-- direction is simply off-fibre.  The netlist view ('Netlist') remains
+-- position-dependent and still does not admit a 'Sum' instance.
 --
 -- For 'Comp', @'Dir' ('Comp p q) = ('Dir p, 'Dir q)@ is the same flat
 -- approximation: the @q@-position (hence its honest pin set) depends on which
@@ -147,6 +155,7 @@ type family Dir (p :: Poly) :: Type where
   Dir 'Y = ()
   Dir ('Const a) = Void
   Dir ('Exp a) = a
+  Dir ('Sum p q) = Either (Dir p) (Dir q)
   Dir ('Prod p q) = Either (Dir p) (Dir q)
   Dir ('Tensor p q) = (Dir p, Dir q)
   Dir ('Comp p q) = (Dir p, Dir q)
@@ -379,8 +388,12 @@ tensorEval v w =
 --
 -- This is the entry point for acyclic wiring over the Dirichlet tensor —
 -- boxes in parallel, pins assigned jointly.
-parWiring :: (Netlist p, Netlist q) => System s p -> System t q -> System (s, t) (Tensor p q)
-parWiring sp sq (s, t) = tensorEval (sp s) (sq t)
+parWiring :: System (->) s p -> System (->) t q -> System (->) (s, t) (Tensor p q)
+parWiring (System sp) (System sq) =
+  System $ \((s, t), (dp, dq)) ->
+    let (s', posP) = sp (s, dp)
+        (t', posQ) = sq (t, dq)
+     in ((s', t'), (posP, posQ))
 
 -- $netlist-roundtrip
 --
@@ -467,6 +480,10 @@ parWiring sp sq (s, t) = tensorEval (sp s) (sq t)
 data Morphism (p :: Poly) (q :: Poly) where
   -- | Identity morphism.
   Id :: Morphism p p
+  -- | Global element: a point of @q@ as a morphism @Y -> q@.
+  --
+  -- By the Yoneda lemma, @Poly(Y, q) ≅ q(1) ≅ Eval q ()@.
+  Point :: Eval q () -> Morphism 'Y q
   -- | Covariant embedding of a plain function into constants.
   ConstMap :: (a -> b) -> Morphism ('Const a) ('Const b)
   -- | Contravariant embedding of a plain function into exponentials.
@@ -546,6 +563,7 @@ instance Category Morphism where
 runMorphism :: Morphism p q -> (forall x. Eval p x -> Eval q x)
 runMorphism = \case
   Id -> id
+  Point u -> \(EY v) -> fmap (const v) u
   ConstMap f -> \(EK a) -> EK (f a)
   ExpMap f -> \(EE g) -> EE (g . f)
   Compose g f -> runMorphism g . runMorphism f
@@ -671,14 +689,14 @@ runMorphism = \case
 -- 'parWiring' places two monomial systems side by side; 'parT' maps the
 -- wired interface (wire-then-map).
 --
--- >>> let sysN = (\s -> EP (EK (s + 1), EE (\dn -> s + dn))) :: System Int (Mono Int Int)
--- >>> let sysB = (\b -> EP (EK b, EE (\db -> b && db))) :: System Bool (Mono Bool Bool)
--- >>> case parWiring sysN sysB (3, True) of ET ((n, ()), (c, ())) f -> (n, c, f (Right 2, Right False))
+-- >>> let sysN = System (\(s, d) -> (s + monoDir d, (s + 1, ()))) :: System (->) Int (Mono Int Int)
+-- >>> let sysB = System (\(b, d) -> (b && monoDir d, (b, ()))) :: System (->) Bool (Mono Bool Bool)
+-- >>> case toEvalSystem (parWiring sysN sysB) (3, True) of ET ((n, ()), (c, ())) f -> (n, c, f (Right 2, Right False))
 -- (4,True,(5,False))
 --
 -- >>> let m1 = lens show (\n dn -> n + dn) :: Morphism (Mono Int Int) (Mono String Int)
 -- >>> let m2 = lens (\b -> if b then 1 else 0 :: Int) (\b db -> b && db) :: Morphism (Mono Bool Bool) (Mono Int Bool)
--- >>> let wired = parWiring sysN sysB (5, True)
+-- >>> let wired = toEvalSystem (parWiring sysN sysB) (5, True)
 -- >>> case parT m1 m2 wired of ET ((_, ()), (_, ())) f -> f (Right 3, Right True)
 -- (14,True)
 
@@ -731,13 +749,95 @@ prismMatch p s = case runMorphism p (EP (EK s, EE id)) of
   ES (Left (EP (EK a, _))) -> Left a
   ES (Right (EP (EK s', _))) -> Right s'
 
--- | A dynamical system with interface @p@ and state type @s@.
+-- | A dynamical system with interface @p@, carrier @s@, over base arrow @arr@.
 --
--- For the polynomial @Prod (Const o) (Exp i)@ this is the usual Moore
--- machine: expose an output @o@ and accept an input @i@ to determine the
--- next state.
-type System s (p :: Poly) = s -> Eval p s
+-- Uncurried netlist form: the state and the current input direction are fed
+-- together, and the result is the next state together with the current output
+-- position.  For the monomial @Mono o i@ this is exactly the Moore body
+-- @arr (s, i) (s, o)@ after collapsing the unit positions.
+newtype System (arr :: Type -> Type -> Type) s (p :: Poly) = System
+  (arr (s, Dir p) (s, Pos p))
+
+-- | Extract the monomial direction from its 'Either Void' encoding.
+monoDir :: Dir (Mono o i) -> i
+monoDir (Right i) = i
+monoDir (Left v) = absurd v
+
+-- | Inject a monomial direction into its 'Either Void' encoding.
+monoIn :: i -> Dir (Mono o i)
+monoIn = Right
+
+-- | Convert an eval-form '(->)' system into the arrow form.
+fromEvalSystem :: (SystemEval p) => (s -> Eval p s) -> System (->) s p
+fromEvalSystem f = System $ \(s, d) ->
+  let (pos, next) = evalToSystem (f s)
+   in (next d, pos)
+
+-- | Convert an arrow-form '(->)' system back into eval form.
+toEvalSystem :: forall p s. (SystemEval p) => System (->) s p -> s -> Eval p s
+toEvalSystem (System sys) s = evalFromSystem pos (\d -> fst (sys (s, d)))
+  where
+    pos = snd (sys (s, probeDir @p))
 
 -- | Run one step: observe the current @p@-output from state @s@.
-step :: System s p -> s -> Eval p s
-step = id
+step :: (SystemEval p) => System (->) s p -> s -> Eval p s
+step = toEvalSystem
+
+-- | Helpers for translating between the 'Eval' presentation and the arrow
+-- presentation of a '(->)' system.  These extend the netlist view to 'Sum'.
+class SystemEval (p :: Poly) where
+  evalToSystem :: Eval p x -> (Pos p, Dir p -> x)
+  evalFromSystem :: Pos p -> (Dir p -> x) -> Eval p x
+  probeDir :: Dir p
+
+instance SystemEval 'Y where
+  evalToSystem (EY x) = ((), \() -> x)
+  evalFromSystem () k = EY (k ())
+  probeDir = ()
+
+instance SystemEval ('Const a) where
+  evalToSystem (EK c) = (c, absurd)
+  evalFromSystem c _ = EK c
+  probeDir = error "probeDir Const"
+
+instance SystemEval ('Exp a) where
+  evalToSystem (EE f) = ((), f)
+  evalFromSystem () k = EE k
+  probeDir = error "probeDir Exp"
+
+instance (SystemEval p, SystemEval q) => SystemEval ('Sum p q) where
+  evalToSystem (ES (Left v)) =
+    let (i, f) = evalToSystem v
+     in (Left i, either f (const offFibre))
+  evalToSystem (ES (Right w)) =
+    let (j, g) = evalToSystem w
+     in (Right j, either (const offFibre) g)
+  evalFromSystem (Left i) k = ES (Left (evalFromSystem i (k . Left)))
+  evalFromSystem (Right j) k = ES (Right (evalFromSystem j (k . Right)))
+  probeDir :: Dir ('Sum p q)
+  probeDir = Left (probeDir @p)
+
+instance (SystemEval p, SystemEval q) => SystemEval ('Prod p q) where
+  evalToSystem (EP (u, v)) =
+    let (i, f) = evalToSystem u
+        (j, g) = evalToSystem v
+     in ((i, j), either f g)
+  evalFromSystem (i, j) k =
+    EP (evalFromSystem i (k . Left), evalFromSystem j (k . Right))
+  probeDir :: Dir ('Prod p q)
+  probeDir = Left (probeDir @p)
+
+instance (SystemEval p, SystemEval q) => SystemEval ('Tensor p q) where
+  evalToSystem (ET pos f) = (pos, f)
+  evalFromSystem pos k = ET pos k
+  probeDir :: Dir ('Tensor p q)
+  probeDir = (probeDir @p, probeDir @q)
+
+instance (SystemEval p, SystemEval q) => SystemEval ('Comp p q) where
+  evalToSystem (EC pos f) = (pos, f)
+  evalFromSystem pos k = EC pos k
+  probeDir :: Dir ('Comp p q)
+  probeDir = (probeDir @p, probeDir @q)
+
+offFibre :: a
+offFibre = error "off-fibre direction"
