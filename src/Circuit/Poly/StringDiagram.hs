@@ -50,11 +50,11 @@ module Circuit.Poly.StringDiagram
 where
 
 import Circuit.Category qualified as Cat
-import Circuit.Poly.Int (IN, IntMorph (..))
-import Circuit.Poly.Int qualified as Int
 import Circuit.Layer (run)
 import Circuit.Loop (Loop (..))
 import Circuit.Poly (Mono, Morphism, applyLens)
+import Circuit.Poly.Int (IN, IntMorph (..))
+import Circuit.Poly.Int qualified as Int
 import Circuit.Tensor qualified as M
 import Prelude hiding (id, (.))
 
@@ -104,7 +104,7 @@ data SDiagram
 -- The constructors mirror the public smart constructors exactly.
 data Diagram_ a da b db where
   Wire_ :: Diagram_ a da a da
-  Box_ :: String -> Morphism (Mono a da) (Mono b db) -> Diagram_ a da b db
+  Box_ :: String -> Morphism (Mono da a) (Mono db b) -> Diagram_ a da b db
   PrismBox_ ::
     (s -> Either a s) ->
     (a -> s) ->
@@ -164,9 +164,13 @@ toIntMorph (Diagram d) = case d of
   Wire_ -> IntMorph (Lift M.swap)
   Box_ _ m -> IntMorph (Lift (\(a, db) -> let (b, put) = applyLens m a in (put db, b)))
   PrismBox_ match build ->
-    IntMorph (Lift (\(s, e) -> case e of
-      Left a -> (build a, match s)
-      Right s' -> (s', match s)))
+    IntMorph
+      ( Lift
+          ( \(s, e) -> case e of
+              Left a -> (build a, match s)
+              Right s' -> (s', match s)
+          )
+      )
   Beside_ f g -> besideInt (toIntMorph (Diagram f)) (toIntMorph (Diagram g))
   ThenD_ f g -> Int.comp (toIntMorph (Diagram g)) (toIntMorph (Diagram f))
   Bend_ -> IntMorph (Lift (\((da, a), ()) -> ((a, da), ())))
@@ -188,11 +192,11 @@ wire :: Diagram a da a da
 wire = Diagram Wire_
 
 -- | A box built from a causal dependent lens.
-box :: Morphism (Mono a da) (Mono b db) -> Diagram a da b db
+box :: Morphism (Mono da a) (Mono db b) -> Diagram a da b db
 box = boxLabelled "box"
 
 -- | A labelled box built from a causal dependent lens.
-boxLabelled :: String -> Morphism (Mono a da) (Mono b db) -> Diagram a da b db
+boxLabelled :: String -> Morphism (Mono da a) (Mono db b) -> Diagram a da b db
 boxLabelled lbl m = Diagram (Box_ lbl m)
 
 -- | A prism box: partial access to a sum-shaped position.

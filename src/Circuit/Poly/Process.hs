@@ -4,7 +4,7 @@
 -- 'Circuit.Process.Process' machines.
 --
 -- A 'System' over a monomial interface @Mono i o@ is a Moore machine: the
--- current state determines the output @i@, and the next input direction @o@
+-- current state determines the output @o@, and the next input direction @i@
 -- determines the next state. 'Circuit.Process.Process' is the same shape, so
 -- the two views round-trip exactly.
 module Circuit.Poly.Process
@@ -48,15 +48,15 @@ import Prelude hiding (id, (.))
 
 -- | Run a monomial system at a state, exposing the output position and the
 -- state-transition function.
-runSystem :: System (->) s (Mono i o) -> s -> (i, o -> s)
-runSystem sys s = case toEvalSystem sys s of EP (EK i, EE f) -> (i, f)
+runSystem :: System (->) s (Mono i o) -> s -> (o, i -> s)
+runSystem sys s = case toEvalSystem sys s of EP (EK o, EE f) -> (o, f)
 
 -- | Convert a monomial 'System' into a 'Process' machine with a given initial
 -- state.
 --
 -- The first input is consumed for the state transition from the supplied
 -- initial state, matching the coalgebra intuition of a 'System'.
-systemAsProcess :: System (->) s (Mono i o) -> s -> Process o i
+systemAsProcess :: System (->) s (Mono i o) -> s -> Process i o
 systemAsProcess sys s0 =
   Process
     (\o -> snd (runSystem sys s0) o)
@@ -66,45 +66,45 @@ systemAsProcess sys s0 =
 -- | Run a system for as many steps as there are inputs, emitting one output
 -- per input. The output is the state /after/ consuming the input, matching
 -- the 'Circuit.Process.Process' semantics of 'systemAsProcess'.
-iterateSystem :: System (->) s (Mono i o) -> s -> [o] -> [i]
+iterateSystem :: System (->) s (Mono i o) -> s -> [i] -> [o]
 iterateSystem _ _ [] = []
-iterateSystem sys s (o : os) =
-  let s' = snd (runSystem sys s) o
-      (i, _) = runSystem sys s'
-   in i : iterateSystem sys s' os
+iterateSystem sys s (i : is) =
+  let s' = snd (runSystem sys s) i
+      (o, _) = runSystem sys s'
+   in o : iterateSystem sys s' is
 
 -- | State after consuming a list of inputs.
-after :: System (->) s (Mono i o) -> s -> [o] -> s
+after :: System (->) s (Mono i o) -> s -> [i] -> s
 after _ s [] = s
-after sys s (o : os) = after sys (snd (runSystem sys s) o) os
+after sys s (i : is) = after sys (snd (runSystem sys s) i) is
 
 -- | The coalgebra-as-lens isomorphism.
 --
--- A monomial system @System (->) s (Mono o i)@ is exactly a lens
--- @S y^S -> Mono o i@: the current state @s@ determines the output position
+-- A monomial system @System (->) s (Mono i o)@ is exactly a lens
+-- @S y^S -> Mono i o@: the current state @s@ determines the output position
 -- @o@, and each input direction @i@ determines the next state @s@.
 --
 -- This is the bridge to Spivak's presentation: @System s p ≅ Poly(S y^S, p)@.
-systemAsLens :: System (->) s (Mono o i) -> Morphism (Mono s s) (Mono o i)
+systemAsLens :: System (->) s (Mono i o) -> Morphism (Mono s s) (Mono i o)
 systemAsLens sys = lens get put
   where
     get s = fst (runSystem sys s)
     put s i = snd (runSystem sys s) i
 
--- | Inverse of 'systemAsLens': build a system from a lens @S y^S -> Mono o i@.
-lensAsSystem :: Morphism (Mono s s) (Mono o i) -> System (->) s (Mono o i)
+-- | Inverse of 'systemAsLens': build a system from a lens @S y^S -> Mono i o@.
+lensAsSystem :: Morphism (Mono s s) (Mono i o) -> System (->) s (Mono i o)
 lensAsSystem m = fromEvalSystem $ \s ->
   case applyLens m s of
     (o, put) -> EP (EK o, EE put)
 
 -- | Comultiplication for an /observable/ system: the output position is the
 -- state. The result is a system over the two-step interface
--- @Mono s o ◁ Mono s o@, so that feeding a pair of inputs @(o1, o2)@ runs the
+-- @Mono o s ◁ Mono o s@, so that feeding a pair of inputs @(o1, o2)@ runs the
 -- original system for two steps.
 --
 -- This is the concrete coalgebra witnessing that a Moore machine is a comonoid
 -- in @(Poly, Y, ◁)@ once state is exposed as position.
-duplicateSystem :: System (->) s (Mono s o) -> System (->) s ('Comp (Mono s o) (Mono s o))
+duplicateSystem :: System (->) s (Mono o s) -> System (->) s ('Comp (Mono o s) (Mono o s))
 duplicateSystem sys =
   fromEvalSystem $ \s ->
     let (s0, step) = runSystem sys s
@@ -120,9 +120,9 @@ duplicateSystem sys =
 -- polynomial interface ('Sum') rather than in the carrier-level 'if'.
 branchSystem ::
   (s -> Bool) ->
-  System (->) s (Mono o i) ->
-  System (->) s (Mono o i) ->
-  System (->) s ('Sum (Mono o i) (Mono o i))
+  System (->) s (Mono i o) ->
+  System (->) s (Mono i o) ->
+  System (->) s ('Sum (Mono i o) (Mono i o))
 branchSystem cond sysL sysR =
   fromEvalSystem $ \s ->
     if cond s
@@ -135,7 +135,7 @@ branchSystem cond sysL sysR =
 -- determined by the output position.  The transition function is therefore
 -- total: it takes an @i@ and dispatches to the branch that was selected.
 runSystemSum ::
-  System (->) s ('Sum (Mono o i) (Mono o i)) ->
+  System (->) s ('Sum (Mono i o) (Mono i o)) ->
   s ->
   (Either o o, i -> s)
 runSystemSum sys s = case toEvalSystem sys s of
@@ -159,9 +159,9 @@ data SumStep s o1 i1 o2 i2 where
 -- total.
 branchSystemHet ::
   (s -> Bool) ->
-  System (->) s (Mono o1 i1) ->
-  System (->) s (Mono o2 i2) ->
-  System (->) s ('Sum (Mono o1 i1) (Mono o2 i2))
+  System (->) s (Mono i1 o1) ->
+  System (->) s (Mono i2 o2) ->
+  System (->) s ('Sum (Mono i1 o1) (Mono i2 o2))
 branchSystemHet cond sysL sysR =
   fromEvalSystem $ \s ->
     if cond s
@@ -174,7 +174,7 @@ branchSystemHet cond sysL sysR =
 -- function.  Because the branch is statically known in the GADT, there is no
 -- wrong-branch input to raise an error on.
 runSystemSumHet ::
-  System (->) s ('Sum (Mono o1 i1) (Mono o2 i2)) ->
+  System (->) s ('Sum (Mono i1 o1) (Mono i2 o2)) ->
   s ->
   SumStep s o1 i1 o2 i2
 runSystemSumHet sys s = case toEvalSystem sys s of
@@ -201,11 +201,11 @@ data Coalgebra s p q = Coalgebra
 coalgebraToSystem :: (SystemEval q) => Coalgebra s 'Y q -> System (->) s q
 coalgebraToSystem coal = fromEvalSystem $ \s -> upd coal s (EY s)
 
--- | Convert a monomial 'System' into a @Coalgebra s 'Y (Mono o i)@.
+-- | Convert a monomial 'System' into a @Coalgebra s 'Y (Mono i o)@.
 --
--- The @Y -> Mono o i@ morphism is built from the constant output position and
+-- The @Y -> Mono i o@ morphism is built from the constant output position and
 -- the trivial backward map on the unit direction space of @Y@.
-systemToCoalgebraMono :: System (->) s (Mono o i) -> Coalgebra s 'Y (Mono o i)
+systemToCoalgebraMono :: System (->) s (Mono i o) -> Coalgebra s 'Y (Mono i o)
 systemToCoalgebraMono sys =
   Coalgebra
     { act = \s -> let (o, _) = runSystem sys s in Point (EP (EK o, EE (\_ -> ()))),

@@ -6,25 +6,8 @@
 module Main (main) where
 
 import Circuit.AD.Param (DiffP (..), splitP)
+import Circuit.Category ((.))
 import Circuit.Poly
-import Circuit.Poly.Span
-  ( Span (..),
-    DirC,
-    EvalC (..),
-    NetlistC (..),
-    PosC,
-    SpanC (..),
-    compAssocLC,
-    compAssocRC,
-    compToNestedC,
-    distrDirLC,
-    distrPosLC,
-    netRoundTripC,
-    nestedToCompC,
-    onFibreC,
-    prodSumDistrLC,
-    prodSumDistrRC,
-  )
 import Circuit.Poly.DiffP
   ( diffPAsFamily,
     diffPAt,
@@ -35,8 +18,8 @@ import Circuit.Poly.DiffP
   )
 import Circuit.Poly.Process
   ( Coalgebra (..),
-    SumStep (..),
     Step,
+    SumStep (..),
     after,
     branchSystem,
     branchSystemHet,
@@ -52,8 +35,24 @@ import Circuit.Poly.Process
     systemAsProcess,
     systemToCoalgebraMono,
   )
-import Circuit.Category ((.))
-import Circuit.Process (scan)
+import Circuit.Poly.Span
+  ( DirC,
+    EvalC (..),
+    NetlistC (..),
+    PosC,
+    Span (..),
+    SpanC (..),
+    compAssocLC,
+    compAssocRC,
+    compToNestedC,
+    distrDirLC,
+    distrPosLC,
+    nestedToCompC,
+    netRoundTripC,
+    onFibreC,
+    prodSumDistrLC,
+    prodSumDistrRC,
+  )
 import Circuit.Poly.StringDiagram
   ( Diagram,
     SDiagram (..),
@@ -76,12 +75,13 @@ import Circuit.Poly.StringDiagram
     unitR',
     wire,
   )
-import Control.Exception (ErrorCall, try, evaluate)
+import Circuit.Process (scan)
+import Control.Exception (ErrorCall, evaluate, try)
 import Data.List (scanl')
 import Data.Maybe (isJust, isNothing)
 import Data.Void (Void, absurd)
-import Prelude hiding (id, (.))
 import System.Exit (exitFailure)
+import Prelude hiding (id, (.))
 
 assert :: String -> Bool -> IO ()
 assert msg ok =
@@ -104,8 +104,8 @@ assertError msg action = do
 -- and checking both the output position and pullback at sample cotangents.
 monoEq ::
   (Eq b, Eq da) =>
-  Morphism (Mono a da) (Mono b db) ->
-  Morphism (Mono a da) (Mono b db) ->
+  Morphism (Mono da a) (Mono db b) ->
+  Morphism (Mono da a) (Mono db b) ->
   a ->
   [db] ->
   Bool
@@ -146,7 +146,7 @@ evalNetEq ds v w =
 -- | Concrete monomial lenses for oracles.
 --
 -- intLens: show an Int, put adds the cotangent to the source.
-intLens :: Morphism (Mono Int Int) (Mono String Int)
+intLens :: Morphism (Mono Int Int) (Mono Int String)
 intLens = lens show (\n d -> n + d)
 
 -- transLens1: translate by 1. Bijection, so well-behaved.
@@ -169,9 +169,9 @@ runSystemArr :: System arr s p -> arr (s, Dir p) (s, Pos p)
 runSystemArr (System f) = f
 
 -- | Embed a parameterised lens @(s, i) -> (s, o)@ as a 'System' over the
--- monomial @Mono o i@.  The state channel is preserved so the resulting
+-- monomial @Mono i o@.  The state channel is preserved so the resulting
 -- system can be traced.
-diffPMono :: DiffP p (s, i) (s, o) -> System (DiffP p) s (Mono o i)
+diffPMono :: DiffP p (s, i) (s, o) -> System (DiffP p) s (Mono i o)
 diffPMono (DiffP f) = System $ DiffP $ \p0 (s, d) ->
   let i = case d of Right x -> x; Left v -> absurd v
       ((s', o), back) = f p0 (s, i)
@@ -181,11 +181,11 @@ diffPMono (DiffP f) = System $ DiffP $ \p0 (s, d) ->
    in ((s', (o, ())), back')
 
 -- | Structural pre-map: inject an ordinary input into the monomial direction.
-monoPre :: (Num p) => DiffP p i (Dir (Mono o i))
+monoPre :: (Num p) => DiffP p i (Dir (Mono i o))
 monoPre = DiffP $ \_ i -> (Right i, \case Left v -> absurd v; Right di -> (di, 0))
 
 -- | Structural post-map: project the monomial position onto the ordinary output.
-monoPost :: (Num p) => DiffP p (Pos (Mono o i)) o
+monoPost :: (Num p) => DiffP p (Pos (Mono i o)) o
 monoPost = DiffP $ \_ (o, ()) -> (o, \do' -> ((do', ()), 0))
 
 -- | Contractive step used in G4b/G4c: s' = p·s + i, o = s'.
@@ -320,14 +320,16 @@ main = do
       EE f -> f 'a' == 1 && f 'b' == 2 && f 'c' == 3
 
   do
-    let pv = EP (EE (\c -> c : "!"), EE (\c -> c : "?")) ::
-             Eval ('Prod ('Exp Char) ('Exp Char)) String
+    let pv =
+          EP (EE (\c -> c : "!"), EE (\c -> c : "?")) ::
+            Eval ('Prod ('Exp Char) ('Exp Char)) String
     assert "netRoundTrip Prod" $ case netRoundTrip pv of
       EP (EE f, EE g) -> f 'x' == "x!" && g 'y' == "y?"
 
   do
-    let tv = ET ((), ()) (\(d1, d2) -> d1 ++ d2) ::
-             Eval ('Tensor ('Exp String) ('Exp String)) String
+    let tv =
+          ET ((), ()) (\(d1, d2) -> d1 ++ d2) ::
+            Eval ('Tensor ('Exp String) ('Exp String)) String
     assert "netRoundTrip Tensor" $ case netRoundTrip tv of
       ET ((), ()) f -> f ("hello ", "world") == "hello world"
 
@@ -348,17 +350,17 @@ main = do
       EP (EK n, EE f) -> n == 5 && f 3 == 4
 
   do
-    let ab = ET ((), ()) (\(a, b) -> a ++ b) ::
-             Eval ('Tensor ('Exp String) ('Exp String)) String
-    assert "tensor braiding self-inverse" $ case
-      runMorphism (Compose TensorBraid TensorBraid) ab of
+    let ab =
+          ET ((), ()) (\(a, b) -> a ++ b) ::
+            Eval ('Tensor ('Exp String) ('Exp String)) String
+    assert "tensor braiding self-inverse" $ case runMorphism (Compose TensorBraid TensorBraid) ab of
       ET ((), ()) f -> f ("hello ", "world") == "hello world"
 
   do
-    let abc = ET (((), ()), ()) (\((a, b), c) -> a ++ b ++ c) ::
-             Eval ('Tensor ('Tensor ('Exp String) ('Exp String)) ('Exp String)) String
-    assert "tensor associator round-trip" $ case
-      runMorphism (Compose TensorAssocR TensorAssocL) abc of
+    let abc =
+          ET (((), ()), ()) (\((a, b), c) -> a ++ b ++ c) ::
+            Eval ('Tensor ('Tensor ('Exp String) ('Exp String)) ('Exp String)) String
+    assert "tensor associator round-trip" $ case runMorphism (Compose TensorAssocR TensorAssocL) abc of
       ET (((), ()), ()) f -> f (("x", "y"), "z") == "xyz"
 
   ----------------------------------------------------------------------
@@ -366,17 +368,17 @@ main = do
   ----------------------------------------------------------------------
   putStrLn "Phase 1: composition product iso"
   do
-    let nested = EP (EK 5, EE (\dn -> EP (EK (show dn ++ "!"), EE (\c -> [c] ++ "?")))) ::
-             Eval (Mono Int Int) (Eval (Mono String Char) String)
-    assert "nestedToComp . compToNested" $ case
-      nestedToComp (compToNested (nestedToComp nested)) of
+    let nested =
+          EP (EK 5, EE (\dn -> EP (EK (show dn ++ "!"), EE (\c -> [c] ++ "?")))) ::
+            Eval (Mono Int Int) (Eval (Mono Char String) String)
+    assert "nestedToComp . compToNested" $ case nestedToComp (compToNested (nestedToComp nested)) of
       EC ((n, ()), hang) k ->
         n == 5 && fst (hang (Right 7)) == "7!" && k (Right 7, Right 'a') == "a?"
 
   do
     let dyn = EE (\n -> EE (\m -> n + m)) :: Eval ('Exp Int) (Eval ('Exp Int) Int)
-    assert "compToNested . nestedToComp" $ case
-      compToNested (nestedToComp dyn) of EE f -> case f 10 of EE g -> g 20 == 30
+    assert "compToNested . nestedToComp" $ case compToNested (nestedToComp dyn) of
+      EE f -> case f 10 of EE g -> g 20 == 30
 
   ----------------------------------------------------------------------
   -- Phase 2: DiffP bridge as parameter-indexed lens family
@@ -435,7 +437,8 @@ main = do
     -- Other direction: CompUnitL' . CompUnitL preserves the CompUnitL image.
     let compYMono :: Eval ('Comp 'Y (Mono Int Int)) String
         compYMono =
-          EC ((), \_ -> (5, ()))
+          EC
+            ((), \_ -> (5, ()))
             (\case ((), Right n) -> show n ++ "!"; ((), Left v) -> absurd v)
         mono = runMorphism CompUnitL compYMono
         compYMono' = runMorphism CompUnitL' mono
@@ -456,7 +459,8 @@ main = do
     -- Other direction: CompUnitR' . CompUnitR preserves the CompUnitR image.
     let compMonoY :: Eval ('Comp (Mono Int Int) 'Y) Int
         compMonoY =
-          EC ((3, ()), \_ -> ())
+          EC
+            ((3, ()), \_ -> ())
             (\case (Right n, ()) -> n * 3; (Left v, ()) -> absurd v)
         mono = runMorphism CompUnitR compMonoY
         compMonoY' = runMorphism CompUnitR' mono
@@ -669,7 +673,7 @@ main = do
     assert "systemAsProcess sum" $ scan sumProcess [1, 2, 3, 4] == [1, 3, 6, 10]
 
   do
-    let countSystem :: System (->) Int (Mono Int ())
+    let countSystem :: System (->) Int (Mono () Int)
         countSystem = fromEvalSystem $ \s -> EP (EK s, EE (\() -> s + 1))
         countProcess = systemAsProcess countSystem 0
     assert "systemAsProcess count" $ scan countProcess [(), (), ()] == [1, 2, 3]
@@ -680,7 +684,7 @@ main = do
     assert "iterateSystem sum" $ iterateSystem sumSystem 0 [1, 2, 3, 4] == [1, 3, 6, 10]
 
   do
-    let countSystem :: System (->) Int (Mono Int ())
+    let countSystem :: System (->) Int (Mono () Int)
         countSystem = fromEvalSystem $ \s -> EP (EK s, EE (\() -> s + 1))
     assert "iterateSystem count" $ iterateSystem countSystem 0 [(), (), ()] == [1, 2, 3]
 
@@ -691,7 +695,7 @@ main = do
     -- stream as iterateSystem.
     let sumSystem :: System (->) Int (Mono Int Int)
         sumSystem = fromEvalSystem $ \s -> EP (EK s, EE (\o -> s + o))
-        countSystem :: System (->) Int (Mono Int ())
+        countSystem :: System (->) Int (Mono () Int)
         countSystem = fromEvalSystem $ \s -> EP (EK s, EE (\() -> s + 1))
     assert "K1 systemAsProcess agrees with iterateSystem (sum)" $
       scan (systemAsProcess sumSystem 0) [1, 2, 3, 4] == iterateSystem sumSystem 0 [1, 2, 3, 4]
@@ -792,7 +796,7 @@ main = do
     -- Counit law: extracting the inner position from duplicateSystem recovers
     -- the original step function. This is the comonad counit for systems where
     -- the output position is the state.
-    let countSystem :: System (->) Int (Mono Int ())
+    let countSystem :: System (->) Int (Mono () Int)
         countSystem = fromEvalSystem $ \s -> EP (EK s, EE (\() -> s + 1))
     assert "duplicateSystem counit (count)" $
       case toEvalSystem (duplicateSystem countSystem) 0 of
@@ -942,12 +946,12 @@ main = do
 
         leftSys =
           coalgebraToSystem
-            (composeCoalgebra (composeCoalgebra cA cB) cC)
-            :: System (->) ((Int, Int), Int) (Comp (Comp (Mono Int Int) (Mono Int Int)) (Mono Int Int))
+            (composeCoalgebra (composeCoalgebra cA cB) cC) ::
+            System (->) ((Int, Int), Int) (Comp (Comp (Mono Int Int) (Mono Int Int)) (Mono Int Int))
         rightSys =
           coalgebraToSystem
-            (composeCoalgebra cA (composeCoalgebra cB cC))
-            :: System (->) (Int, (Int, Int)) (Comp (Mono Int Int) (Comp (Mono Int Int) (Mono Int Int)))
+            (composeCoalgebra cA (composeCoalgebra cB cC)) ::
+            System (->) (Int, (Int, Int)) (Comp (Mono Int Int) (Comp (Mono Int Int) (Mono Int Int)))
 
         inputs = [(1, 2, 3), (4, 5, 6), (7, 8, 9)] :: [(Int, Int, Int)]
         leftResults = runLeftNested leftSys ((0, 10), 20) inputs
@@ -1007,9 +1011,9 @@ main = do
     -- position-dependent input type, no error, no 'Dir' row needed.
     let sumSys :: System (->) Int (Mono Int Int)
         sumSys = fromEvalSystem $ \s -> EP (EK s, EE (\n -> s + n))
-        countSys :: System (->) Int (Mono Int ())
+        countSys :: System (->) Int (Mono () Int)
         countSys = fromEvalSystem $ \s -> EP (EK s, EE (\() -> s + 1))
-        branchSys :: System (->) Int ('Sum (Mono Int Int) (Mono Int ()))
+        branchSys :: System (->) Int ('Sum (Mono Int Int) (Mono () Int))
         branchSys = branchSystemHet even sumSys countSys
         s1 = case runSystemSumHet branchSys 0 of
           SumStepL _ f -> f 5
@@ -1025,9 +1029,9 @@ main = do
     -- direction type is determined by the presented position.
     let sumSys :: System (->) Int (Mono Int Int)
         sumSys = fromEvalSystem $ \s -> EP (EK s, EE (\n -> s + n))
-        countSys :: System (->) Int (Mono Int ())
+        countSys :: System (->) Int (Mono () Int)
         countSys = fromEvalSystem $ \s -> EP (EK s, EE (\() -> s + 1))
-        branchSys :: System (->) Int ('Sum (Mono Int Int) (Mono Int ()))
+        branchSys :: System (->) Int ('Sum (Mono Int Int) (Mono () Int))
         branchSys = branchSystemHet even sumSys countSys
         -- (a) the presented position is a function of the carrier alone.
         branchOf s = case runSystemSumHet branchSys s of
@@ -1316,7 +1320,8 @@ main = do
               Int
           compRight =
             ECC
-              ( (),\_ -> ((), \_ -> ())
+              ( (),
+                \_ -> ((), \_ -> ())
               )
               (\(n, (m, o)) -> n + m + o)
           compRightRound = compAssocLC (compAssocRC compRight)
@@ -1417,11 +1422,13 @@ main = do
 
   do
     -- Par: functorial action on product factors.
-    let m = Par (ConstMap (+ 1)) (ExpMap (* 2)) ::
-          Morphism ('Prod ('Const Int) ('Exp Int)) ('Prod ('Const Int) ('Exp Int))
+    let m =
+          Par (ConstMap (+ 1)) (ExpMap (* 2)) ::
+            Morphism ('Prod ('Const Int) ('Exp Int)) ('Prod ('Const Int) ('Exp Int))
         v = EP (EK 5, EE (+ 10)) :: Eval ('Prod ('Const Int) ('Exp Int)) Int
     assert "Par naturality" $
-      evalNetEq [Right 0, Right 1, Right 2]
+      evalNetEq
+        [Right 0, Right 1, Right 2]
         (fmap show (runMorphism m v))
         (runMorphism m (fmap show v))
 
@@ -1445,8 +1452,9 @@ main = do
 
   do
     -- Case: coproduct elimination.
-    let m = Case (ConstMap (+ 1)) (ConstMap length) ::
-          Morphism ('Sum ('Const Int) ('Const String)) ('Const Int)
+    let m =
+          Case (ConstMap (+ 1)) (ConstMap length) ::
+            Morphism ('Sum ('Const Int) ('Const String)) ('Const Int)
         v = ES (Left (EK 5)) :: Eval ('Sum ('Const Int) ('Const String)) Int
     assert "Case naturality" $
       evalNetEq [] (fmap show (runMorphism m v)) (runMorphism m (fmap show v))
@@ -1470,7 +1478,8 @@ main = do
     let m = Pair Fst Snd :: Morphism ('Prod ('Const Int) ('Const String)) ('Prod ('Const Int) ('Const String))
         v = EP (EK 5, EK "x") :: Eval ('Prod ('Const Int) ('Const String)) Int
     assert "Pair naturality" $
-      evalNetEq []
+      evalNetEq
+        []
         (fmap show (runMorphism m v))
         (runMorphism m (fmap show v))
 
@@ -1483,8 +1492,9 @@ main = do
 
   do
     -- Depend: copower universal property (position-dependent lens).
-    let m = Depend (\a -> ConstMap (+ a)) ::
-          Morphism ('Prod ('Const Int) ('Const Int)) ('Const Int)
+    let m =
+          Depend (\a -> ConstMap (+ a)) ::
+            Morphism ('Prod ('Const Int) ('Const Int)) ('Const Int)
         v = EP (EK 3, EK 5) :: Eval ('Prod ('Const Int) ('Const Int)) Int
     assert "Depend naturality" $
       evalNetEq [] (fmap show (runMorphism m v)) (runMorphism m (fmap show v))
@@ -1492,28 +1502,34 @@ main = do
   do
     -- TensorAssocL: left associator for Dirichlet tensor.
     -- Source direction space is ((Int, Bool), String); target is (Int, (Bool, String)).
-    let m = TensorAssocL ::
-          Morphism
-            ('Tensor ('Tensor ('Exp Int) ('Exp Bool)) ('Exp String))
-            ('Tensor ('Exp Int) ('Tensor ('Exp Bool) ('Exp String)))
-        v = ET (((), ()), ()) (\((n, b), s) -> (n, b, s)) ::
-          Eval ('Tensor ('Tensor ('Exp Int) ('Exp Bool)) ('Exp String)) (Int, Bool, String)
+    let m =
+          TensorAssocL ::
+            Morphism
+              ('Tensor ('Tensor ('Exp Int) ('Exp Bool)) ('Exp String))
+              ('Tensor ('Exp Int) ('Tensor ('Exp Bool) ('Exp String)))
+        v =
+          ET (((), ()), ()) (\((n, b), s) -> (n, b, s)) ::
+            Eval ('Tensor ('Tensor ('Exp Int) ('Exp Bool)) ('Exp String)) (Int, Bool, String)
     assert "TensorAssocL naturality" $
-      evalNetEq [(0, (True, "a")), (1, (False, "b"))]
+      evalNetEq
+        [(0, (True, "a")), (1, (False, "b"))]
         (fmap show (runMorphism m v))
         (runMorphism m (fmap show v))
 
   do
     -- TensorAssocR: right associator for Dirichlet tensor.
     -- Source direction space is (Int, (Bool, String)); target is ((Int, Bool), String).
-    let m = TensorAssocR ::
-          Morphism
-            ('Tensor ('Exp Int) ('Tensor ('Exp Bool) ('Exp String)))
-            ('Tensor ('Tensor ('Exp Int) ('Exp Bool)) ('Exp String))
-        v = ET ((), ((), ())) (\(n, (b, s)) -> (n, b, s)) ::
-          Eval ('Tensor ('Exp Int) ('Tensor ('Exp Bool) ('Exp String))) (Int, Bool, String)
+    let m =
+          TensorAssocR ::
+            Morphism
+              ('Tensor ('Exp Int) ('Tensor ('Exp Bool) ('Exp String)))
+              ('Tensor ('Tensor ('Exp Int) ('Exp Bool)) ('Exp String))
+        v =
+          ET ((), ((), ())) (\(n, (b, s)) -> (n, b, s)) ::
+            Eval ('Tensor ('Exp Int) ('Tensor ('Exp Bool) ('Exp String))) (Int, Bool, String)
     assert "TensorAssocR naturality" $
-      evalNetEq [((0, True), "a"), ((1, False), "b")]
+      evalNetEq
+        [((0, True), "a"), ((1, False), "b")]
         (fmap show (runMorphism m v))
         (runMorphism m (fmap show v))
 
@@ -1523,28 +1539,34 @@ main = do
     let m = TensorBraid :: Morphism ('Tensor ('Exp Int) ('Exp Bool)) ('Tensor ('Exp Bool) ('Exp Int))
         v = ET ((), ()) (\(n, b) -> (n, b)) :: Eval ('Tensor ('Exp Int) ('Exp Bool)) (Int, Bool)
     assert "TensorBraid naturality" $
-      evalNetEq [(True, 0), (False, 1)]
+      evalNetEq
+        [(True, 0), (False, 1)]
         (fmap show (runMorphism m v))
         (runMorphism m (fmap show v))
 
   do
     -- ParT: functorial action of tensor on monomials.
-    let m = ParT intLens negLens ::
-          Morphism ('Tensor (Mono Int Int) (Mono Int Int)) ('Tensor (Mono String Int) (Mono Int Int))
-        v = ET ((5, ()), (3, ())) (\(d1, d2) -> (monoDir d1, monoDir d2)) ::
-          Eval ('Tensor (Mono Int Int) (Mono Int Int)) (Int, Int)
+    let m =
+          ParT intLens negLens ::
+            Morphism ('Tensor (Mono Int Int) (Mono Int Int)) ('Tensor (Mono Int String) (Mono Int Int))
+        v =
+          ET ((5, ()), (3, ())) (\(d1, d2) -> (monoDir d1, monoDir d2)) ::
+            Eval ('Tensor (Mono Int Int) (Mono Int Int)) (Int, Int)
     assert "ParT naturality" $
-      evalNetEq [(Right 2, Right 4), (Right 0, Right 1)]
+      evalNetEq
+        [(Right 2, Right 4), (Right 0, Right 1)]
         (fmap show (runMorphism m v))
         (runMorphism m (fmap show v))
 
   do
     -- CompUnitL: left unitor for composition product.
     let m = CompUnitL :: Morphism ('Comp 'Y (Mono Int Int)) (Mono Int Int)
-        v = EC ((), const (5, ())) (\((), d) -> monoDir d + 1) ::
-          Eval ('Comp 'Y (Mono Int Int)) Int
+        v =
+          EC ((), const (5, ())) (\((), d) -> monoDir d + 1) ::
+            Eval ('Comp 'Y (Mono Int Int)) Int
     assert "CompUnitL naturality" $
-      evalNetEq [Right 0, Right 7]
+      evalNetEq
+        [Right 0, Right 7]
         (fmap show (runMorphism m v))
         (runMorphism m (fmap show v))
 
@@ -1561,10 +1583,12 @@ main = do
   do
     -- CompUnitR: right unitor for composition product.
     let m = CompUnitR :: Morphism ('Comp (Mono Int Int) 'Y) (Mono Int Int)
-        v = EC ((5, ()), const ()) (\(d, ()) -> monoDir d + 1) ::
-          Eval ('Comp (Mono Int Int) 'Y) Int
+        v =
+          EC ((5, ()), const ()) (\(d, ()) -> monoDir d + 1) ::
+            Eval ('Comp (Mono Int Int) 'Y) Int
     assert "CompUnitR naturality" $
-      evalNetEq [Right 0, Right 7]
+      evalNetEq
+        [Right 0, Right 7]
         (fmap show (runMorphism m v))
         (runMorphism m (fmap show v))
 
@@ -1582,12 +1606,14 @@ main = do
   do
     -- CompAssocL: left associator for composition product.
     -- Result direction space is (Int, (Int, Int)); positions are unit-valued.
-    let m = CompAssocL ::
-          Morphism
-            ('Comp ('Comp ('Exp Int) ('Exp Int)) ('Exp Int))
-            ('Comp ('Exp Int) ('Comp ('Exp Int) ('Exp Int)))
-        v = EC (((), const ()), const ()) (\((n, q), o) -> n + q + o) ::
-          Eval ('Comp ('Comp ('Exp Int) ('Exp Int)) ('Exp Int)) Int
+    let m =
+          CompAssocL ::
+            Morphism
+              ('Comp ('Comp ('Exp Int) ('Exp Int)) ('Exp Int))
+              ('Comp ('Exp Int) ('Comp ('Exp Int) ('Exp Int)))
+        v =
+          EC (((), const ()), const ()) (\((n, q), o) -> n + q + o) ::
+            Eval ('Comp ('Comp ('Exp Int) ('Exp Int)) ('Exp Int)) Int
     assert "CompAssocL naturality" $
       case (fmap show (runMorphism m v), runMorphism m (fmap show v)) of
         (EC ((), hang) k, EC ((), hang') k') ->
@@ -1599,12 +1625,14 @@ main = do
   do
     -- CompAssocR: right associator for composition product.
     -- Result direction space is ((Int, Int), Int); positions are unit-valued.
-    let m = CompAssocR ::
-          Morphism
-            ('Comp ('Exp Int) ('Comp ('Exp Int) ('Exp Int)))
-            ('Comp ('Comp ('Exp Int) ('Exp Int)) ('Exp Int))
-        v = EC ((), \_ -> ((), \_ -> ())) (\(n, (q, o)) -> n + q + o) ::
-          Eval ('Comp ('Exp Int) ('Comp ('Exp Int) ('Exp Int))) Int
+    let m =
+          CompAssocR ::
+            Morphism
+              ('Comp ('Exp Int) ('Comp ('Exp Int) ('Exp Int)))
+              ('Comp ('Comp ('Exp Int) ('Exp Int)) ('Exp Int))
+        v =
+          EC ((), \_ -> ((), \_ -> ())) (\(n, (q, o)) -> n + q + o) ::
+            Eval ('Comp ('Exp Int) ('Comp ('Exp Int) ('Exp Int))) Int
     assert "CompAssocR naturality" $
       case (fmap show (runMorphism m v), runMorphism m (fmap show v)) of
         (EC (((), _hangInner), _hangOuter) k, EC (((), _hangInner'), _hangOuter') k') ->
@@ -1613,10 +1641,12 @@ main = do
 
   do
     -- CompT: functorial action of composition product on monomials.
-    let m' = CompT transLens1 transLens2 ::
-          Morphism ('Comp (Mono Int Int) (Mono Int Int)) ('Comp (Mono Int Int) (Mono Int Int))
-        v = EC ((1, ()), \_ -> (2, ())) (\(d1, d2) -> monoDir d1 + monoDir d2) ::
-          Eval ('Comp (Mono Int Int) (Mono Int Int)) Int
+    let m' =
+          CompT transLens1 transLens2 ::
+            Morphism ('Comp (Mono Int Int) (Mono Int Int)) ('Comp (Mono Int Int) (Mono Int Int))
+        v =
+          EC ((1, ()), \_ -> (2, ())) (\(d1, d2) -> monoDir d1 + monoDir d2) ::
+            Eval ('Comp (Mono Int Int) (Mono Int Int)) Int
     assert "CompT naturality" $
       case (fmap show (runMorphism m' v), runMorphism m' (fmap show v)) of
         (EC ((n, ()), hang) k, EC ((n', ()), hang') k') ->
@@ -1630,10 +1660,12 @@ main = do
         match = \case Left n -> Left n; Right s -> Right (Right s)
         build :: Int -> Either Int String
         build = Left
-        m = Prism match build ::
-          Morphism (Mono (Either Int String) (Either Int String)) ('Sum (Mono Int Int) (Mono (Either Int String) (Either Int String)))
-        v = EP (EK (Left 5), EE (either (\n -> n) length)) ::
-          Eval (Mono (Either Int String) (Either Int String)) Int
+        m =
+          Prism match build ::
+            Morphism (Mono (Either Int String) (Either Int String)) ('Sum (Mono Int Int) (Mono (Either Int String) (Either Int String)))
+        v =
+          EP (EK (Left 5), EE (either (\n -> n) length)) ::
+            Eval (Mono (Either Int String) (Either Int String)) Int
     assert "Prism naturality" $
       case (fmap show (runMorphism m v), runMorphism m (fmap show v)) of
         (ES (Left (EP (EK a, EE f))), ES (Left (EP (EK b, EE g)))) ->

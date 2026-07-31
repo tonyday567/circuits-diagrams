@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | The Int construction: free compact closure over a traced monoidal
@@ -53,11 +52,11 @@ where
 
 import Circuit.Category ((.))
 import Circuit.Category qualified as Cat (Category (..))
-import Circuit.Hyper (Hyper, lift, observe)
 import Circuit.Channel (Channel (..), Traced (..))
+import Circuit.Hyper (Hyper, lift, observe)
 import Circuit.Loop (Loop (..))
-import Circuit.Tensor qualified as M (Action (..), Tensor (..))
 import Circuit.Poly (Mono, Morphism (Compose), applyLens, lens)
+import Circuit.Tensor qualified as M (Action (..), Tensor (..))
 import Data.Kind (Type)
 import Prelude hiding (id, (.))
 
@@ -458,8 +457,8 @@ braid = IntMorph $ \ ~((x, y), (dy, dx)) -> ((dx, dy), (y, x))
 
 -- | Include a @Poly@ monomial lens as an @Int@ morphism over @(->)@.
 --
--- A monomial @'Mono' a da@ is the @Int@ object @'IN' a da@: forward face @a@,
--- backward face @da@. A lens @'Morphism' ('Mono' a da) ('Mono' b db)@ carries a
+-- A monomial @'Mono' da a@ is the @Int@ object @'IN' a da@: forward face @a@,
+-- backward face @da@. A lens @'Morphism' ('Mono' da a) ('Mono' db b)@ carries a
 -- forward pass @a -> b@ and a backward pass @a -> db -> da@; 'causal' packs them
 -- into the single joint map @(a, db) -> (da, b)@ that an 'IntMorph' demands.
 --
@@ -481,7 +480,7 @@ braid = IntMorph $ \ ~((x, y), (dy, dx)) -> ((dx, dy), (y, x))
 -- Point-dependent lenses cross too: @'lens' 'show' (\\n d -> n + d)@ at @40@ gives
 -- forward @"40"@ and backward @40 + 2 = 42@.
 --
--- >>> let l2 = lens show (\n d -> n + d) :: Morphism (Mono Int Int) (Mono String Int)
+-- >>> let l2 = lens show (\n d -> n + d) :: Morphism (Mono Int Int) (Mono Int String)
 -- >>> runIntMorph (causal l2) (40, 2)
 -- (42,"40")
 --
@@ -491,7 +490,7 @@ braid = IntMorph $ \ ~((x, y), (dy, dx)) -> ((dx, dy), (y, x))
 -- swap, because the causal fragment feeds nothing back through the loop. The knot
 -- is tied and does nothing: pullback magnitude of the trace is zero here.
 --
--- >>> let cz (m :: Morphism (Mono x xd) (Mono y yd)) = IntMorph (Lift (\(a, db) -> let (b, put) = applyLens m a in (put db, b))) :: IntMorph (,) (Loop (,) (->)) x xd y yd
+-- >>> let cz (m :: Morphism (Mono xd x) (Mono yd y)) = IntMorph (Lift (\(a, db) -> let (b, put) = applyLens m a in (put db, b))) :: IntMorph (,) (Loop (,) (->)) x xd y yd
 -- >>> let f = dagger (+1) (*2) :: Morphism (Mono Int Int) (Mono Int Int)
 -- >>> let g = dagger (*10) (+5) :: Morphism (Mono Int Int) (Mono Int Int)
 -- >>> let (b, put) = applyLens (Compose g f) 7 in (b, put 100)
@@ -500,7 +499,7 @@ braid = IntMorph $ \ ~((x, y), (dy, dx)) -> ((dx, dy), (y, x))
 -- (210,80)
 -- >>> case runIntMorph (comp (cz g) (cz f) :: IntMorph (,) (Loop (,) (->)) Int Int Int Int) of Knot _ -> "Knot (tied, trivial)"; Lift _ -> "Lift (no knot)"
 -- "Knot (tied, trivial)"
-causal :: Morphism (Mono a da) (Mono b db) -> IntMorph (,) (->) a da b db
+causal :: Morphism (Mono da a) (Mono db b) -> IntMorph (,) (->) a da b db
 causal m = IntMorph (\(a, db) -> let (b, put) = applyLens m a in (put db, b))
 
 -- $causal-examples

@@ -6,8 +6,8 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- | Sketch: the category Poly.
 --
@@ -312,23 +312,23 @@ compToNested (EC (i, hang) k) =
   fromNet i (\dp -> fromNet (hang dp) (\dq -> k (dp, dq)))
 
 -- | Left unitor for the composition product: @Y ◁ p -> p@.
-compUnitorL :: Netlist p => Eval ('Comp 'Y p) x -> Eval p x
+compUnitorL :: (Netlist p) => Eval ('Comp 'Y p) x -> Eval p x
 compUnitorL (EC ((), hang) k) =
   fromNet (hang ()) (\dp -> k ((), dp))
 
 -- | Inverse left unitor for the composition product: @p -> Y ◁ p@.
-compUnitorL' :: Netlist p => Eval p x -> Eval ('Comp 'Y p) x
+compUnitorL' :: (Netlist p) => Eval p x -> Eval ('Comp 'Y p) x
 compUnitorL' v =
   let (i, k) = toNet v
    in EC ((), const i) (\((), dp) -> k dp)
 
 -- | Right unitor for the composition product: @p ◁ Y -> p@.
-compUnitorR :: Netlist p => Eval ('Comp p 'Y) x -> Eval p x
+compUnitorR :: (Netlist p) => Eval ('Comp p 'Y) x -> Eval p x
 compUnitorR (EC (i, _) k) =
   fromNet i (\dp -> k (dp, ()))
 
 -- | Inverse right unitor for the composition product: @p -> p ◁ Y@.
-compUnitorR' :: Netlist p => Eval p x -> Eval ('Comp p 'Y) x
+compUnitorR' :: (Netlist p) => Eval p x -> Eval ('Comp p 'Y) x
 compUnitorR' v =
   let (i, k) = toNet v
    in EC (i, const ()) (\(dp, ()) -> k dp)
@@ -355,10 +355,10 @@ compAssocR (EC (i, h) k) =
 
 -- | Functorial action of the composition product on monomial morphisms.
 compT ::
-  Morphism (Mono a da) (Mono b db) ->
-  Morphism (Mono c dc) (Mono d dd) ->
-  Eval ('Comp (Mono a da) (Mono c dc)) x ->
-  Eval ('Comp (Mono b db) (Mono d dd)) x
+  Morphism (Mono da a) (Mono db b) ->
+  Morphism (Mono dc c) (Mono dd d) ->
+  Eval ('Comp (Mono da a) (Mono dc c)) x ->
+  Eval ('Comp (Mono db b) (Mono dd d)) x
 compT f g (EC (aPos, hang) k) =
   let ((bPos, ()), fBw) = morphAt f aPos
       newHang db =
@@ -519,17 +519,17 @@ data Morphism (p :: Poly) (q :: Poly) where
   -- Restricted to monomials because the current 'Dir' family cannot express
   -- position-dependent direction sets (in particular, 'Sum' has no 'Dir' row).
   ParT ::
-    Morphism (Mono a da) (Mono b db) ->
-    Morphism (Mono c dc) (Mono d dd) ->
-    Morphism ('Tensor (Mono a da) (Mono c dc)) ('Tensor (Mono b db) (Mono d dd))
+    Morphism (Mono da a) (Mono db b) ->
+    Morphism (Mono dc c) (Mono dd d) ->
+    Morphism ('Tensor (Mono da a) (Mono dc c)) ('Tensor (Mono db b) (Mono dd d))
   -- | Left unitor for the composition product: @Y ◁ p ≅ p@.
-  CompUnitL :: Netlist p => Morphism ('Comp 'Y p) p
+  CompUnitL :: (Netlist p) => Morphism ('Comp 'Y p) p
   -- | Inverse left unitor for the composition product.
-  CompUnitL' :: Netlist p => Morphism p ('Comp 'Y p)
+  CompUnitL' :: (Netlist p) => Morphism p ('Comp 'Y p)
   -- | Right unitor for the composition product: @p ◁ Y ≅ p@.
-  CompUnitR :: Netlist p => Morphism ('Comp p 'Y) p
+  CompUnitR :: (Netlist p) => Morphism ('Comp p 'Y) p
   -- | Inverse right unitor for the composition product.
-  CompUnitR' :: Netlist p => Morphism p ('Comp p 'Y)
+  CompUnitR' :: (Netlist p) => Morphism p ('Comp p 'Y)
   -- | Left associator for the composition product:
   -- @((p ◁ q) ◁ r) -> (p ◁ (q ◁ r))@.
   CompAssocL :: Morphism ('Comp ('Comp p q) r) ('Comp p ('Comp q r))
@@ -540,9 +540,9 @@ data Morphism (p :: Poly) (q :: Poly) where
   --
   -- Restricted to monomials for the same reason as 'ParT'.
   CompT ::
-    Morphism (Mono a da) (Mono b db) ->
-    Morphism (Mono c dc) (Mono d dd) ->
-    Morphism ('Comp (Mono a da) (Mono c dc)) ('Comp (Mono b db) (Mono d dd))
+    Morphism (Mono da a) (Mono db b) ->
+    Morphism (Mono dc c) (Mono dd d) ->
+    Morphism ('Comp (Mono da a) (Mono dc c)) ('Comp (Mono db b) (Mono dd d))
   -- | Prism: a co-lens that matches on a sum-like position.
   --
   -- Forward pass @match :: s -> Either a s@; backward pass on the matched
@@ -633,8 +633,8 @@ runMorphism = \case
 -- pass if ParT ignored the factor morphisms and threaded directions straight
 -- through (the mutation-review catch).
 --
--- >>> let m1 = lens show (\n dn -> n + dn) :: Morphism (Mono Int Int) (Mono String Int)
--- >>> let m2 = lens (\b -> if b then 1 else 0 :: Int) (\b db -> b && db) :: Morphism (Mono Bool Bool) (Mono Int Bool)
+-- >>> let m1 = lens show (\n dn -> n + dn) :: Morphism (Mono Int Int) (Mono Int String)
+-- >>> let m2 = lens (\b -> if b then 1 else 0 :: Int) (\b db -> b && db) :: Morphism (Mono Bool Bool) (Mono Bool Int)
 -- >>> let v = ET ((5, ()), (True, ())) (\(Right n, Right b) -> (n, b)) :: Eval ('Tensor (Mono Int Int) (Mono Bool Bool)) (Int, Bool)
 -- >>> case runMorphism (ParT m1 m2) v of ET ((_, ()), (_, ())) f -> f (Right 3, Right True)
 -- (8,True)
@@ -659,7 +659,7 @@ runMorphism = \case
 -- Correctness iso @'Eval' ('Comp' p q) x ≅ 'Eval' p ('Eval' q x)@.  The
 -- @hang@ map must depend on the outer @p@-direction — a constant hang fails.
 --
--- >>> let nested = EP (EK 5, EE (\dn -> EP (EK (show dn ++ "!"), EE (\c -> [c] ++ "?")))) :: Eval (Mono Int Int) (Eval (Mono String Char) String)
+-- >>> let nested = EP (EK 5, EE (\dn -> EP (EK (show dn ++ "!"), EE (\c -> [c] ++ "?")))) :: Eval (Mono Int Int) (Eval (Mono Char String) String)
 -- >>> case nestedToComp nested of EC ((n, ()), hang) k -> (n, fst (hang (Right 7)), k (Right 7, Right 'a'))
 -- (5,"7!","a?")
 --
@@ -694,24 +694,24 @@ runMorphism = \case
 -- >>> case toEvalSystem (parWiring sysN sysB) (3, True) of ET ((n, ()), (c, ())) f -> (n, c, f (Right 2, Right False))
 -- (4,True,(5,False))
 --
--- >>> let m1 = lens show (\n dn -> n + dn) :: Morphism (Mono Int Int) (Mono String Int)
--- >>> let m2 = lens (\b -> if b then 1 else 0 :: Int) (\b db -> b && db) :: Morphism (Mono Bool Bool) (Mono Int Bool)
+-- >>> let m1 = lens show (\n dn -> n + dn) :: Morphism (Mono Int Int) (Mono Int String)
+-- >>> let m2 = lens (\b -> if b then 1 else 0 :: Int) (\b db -> b && db) :: Morphism (Mono Bool Bool) (Mono Bool Int)
 -- >>> let wired = toEvalSystem (parWiring sysN sysB) (5, True)
 -- >>> case parT m1 m2 wired of ET ((_, ()), (_, ())) f -> f (Right 3, Right True)
 -- (14,True)
 
--- | The monomial interface: @a@ positions, @a'@ directions.
-type Mono a a' = 'Prod ('Const a) ('Exp a')
+-- | The monomial interface: @i@ directions (input), @o@ positions (output).
+type Mono i o = 'Prod ('Const o) ('Exp i)
 
 -- | The general point-dependent lens.
 --
 -- Forward pass @get :: a -> b@; backward pass @put :: a -> db -> da@
 -- depends on the current position.
 --
--- >>> let l = lens show (\n d -> n + d) :: Morphism (Mono Int Int) (Mono String Int)
+-- >>> let l = lens show (\n d -> n + d) :: Morphism (Mono Int Int) (Mono Int String)
 -- >>> let (v, put) = applyLens l 40 in (v, put 2)
 -- ("40",42)
-lens :: (a -> b) -> (a -> db -> da) -> Morphism (Mono a da) (Mono b db)
+lens :: (a -> b) -> (a -> db -> da) -> Morphism (Mono da a) (Mono db b)
 lens f g = Depend (\a -> Pair (Konst (f a)) (ExpMap (g a)))
 
 -- | The position-independent dagger case.
@@ -721,11 +721,11 @@ lens f g = Depend (\a -> Pair (Konst (f a)) (ExpMap (g a)))
 -- >>> let d = dagger (+1) (subtract 1) :: Morphism (Mono Int Int) (Mono Int Int)
 -- >>> let (v, put) = applyLens d 5 in (v, put 6)
 -- (6,5)
-dagger :: (a -> b) -> (db -> da) -> Morphism (Mono a da) (Mono b db)
+dagger :: (a -> b) -> (db -> da) -> Morphism (Mono da a) (Mono db b)
 dagger f g = Pair (Compose (ConstMap f) Fst) (Compose (ExpMap g) Snd)
 
 -- | Apply a monomial morphism as a lens: @(get, put)@.
-applyLens :: Morphism (Mono a da) (Mono b db) -> a -> (b, db -> da)
+applyLens :: Morphism (Mono da a) (Mono db b) -> a -> (b, db -> da)
 applyLens m a = case runMorphism m (EP (EK a, EE id)) of
   EP (EK b, EE g) -> (b, g)
 
@@ -753,18 +753,19 @@ prismMatch p s = case runMorphism p (EP (EK s, EE id)) of
 --
 -- Uncurried netlist form: the state and the current input direction are fed
 -- together, and the result is the next state together with the current output
--- position.  For the monomial @Mono o i@ this is exactly the Moore body
+-- position.  For the monomial @Mono i o@ this is exactly the Moore body
 -- @arr (s, i) (s, o)@ after collapsing the unit positions.
-newtype System (arr :: Type -> Type -> Type) s (p :: Poly) = System
-  (arr (s, Dir p) (s, Pos p))
+newtype System (arr :: Type -> Type -> Type) s (p :: Poly)
+  = System
+      (arr (s, Dir p) (s, Pos p))
 
 -- | Extract the monomial direction from its 'Either Void' encoding.
-monoDir :: Dir (Mono o i) -> i
+monoDir :: Dir (Mono i o) -> i
 monoDir (Right i) = i
 monoDir (Left v) = absurd v
 
 -- | Inject a monomial direction into its 'Either Void' encoding.
-monoIn :: i -> Dir (Mono o i)
+monoIn :: i -> Dir (Mono i o)
 monoIn = Right
 
 -- | Convert an eval-form '(->)' system into the arrow form.
