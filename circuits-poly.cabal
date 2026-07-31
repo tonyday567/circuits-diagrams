@@ -61,7 +61,6 @@ library
   exposed-modules:
     Circuit.Poly.Int
     Circuit.Poly.StringDiagram
-    Circuit.Poly
     Circuit.Poly.Span
     Circuit.Poly.DiffP
     Circuit.Poly.Process
