@@ -1,6 +1,6 @@
-# circuits-poly
+# string-diagrams
 
-> Polynomial interfaces, dependent lenses, and string diagrams.
+> String-diagram surface syntax and polynomial applications for circuits.
 
 This library grew out of a bug.
 
@@ -76,17 +76,18 @@ leave strings, because dependent types want explicit indices and proof terms,
 not wire-and-box pictures.  This library stays in the polynomial/string
 world.)
 
-## Why `circuits-poly`
+## Why `string-diagrams`
 
-`circuits-int` named only the middle engine.  Poly is the main eigenvector of
-the decomposition: everything else is an elaboration of polynomial interfaces
-and the lenses between them.  The package is now `circuits-poly`.
+`circuits-int` named only the middle engine, and `circuits-poly` named the
+polynomial substrate.  Now that the polynomial core lives in `circuits`, this
+package is the user-facing grammar layer: string diagrams and related
+polynomial applications built on top of the semantic machinery.
 
 ```
-circuits-poly  =  Polynomial interfaces
-                +  Dependent lenses
-                +  Int corridor
-                +  String diagrams
+string-diagrams  =  String diagrams
+                  +  Spans
+                  +  Int corridor
+                  +  Differential polynomials
 ```
 
 ## A quick diagram
@@ -109,7 +110,7 @@ calculation.  The picture tells you what the linear algebra is doing.
 
 - `circuits` — the base category language: `Category`, `Tensor`, `Channel`,
   `Traced`, `CopyDiscard`, `MergeZero`.
-- `circuits-poly` — this package: polynomial lenses, the Int corridor, and the
+- `string-diagrams` — this package: polynomial lenses, the Int corridor, and the
   string-diagram surface syntax.
 - `strings-svg` — renders the `SDiagram` sketches as SVG equality galleries.
 - `circuits-ad` — automatic differentiation for lenses.
