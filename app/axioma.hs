@@ -65,6 +65,9 @@ import Circuit.Poly.StringDiagram
     boxLabelled,
     prismBox,
     runDiagram,
+    sCopy,
+    sDelete,
+    sMerge,
     skeleton,
     swap,
     thenD,
@@ -74,6 +77,16 @@ import Circuit.Poly.StringDiagram
     unitR,
     unitR',
     wire,
+  )
+import Circuit.Poly.StringDiagram.Hyper
+  ( BoundaryEnd (..),
+    HyperGraph (..),
+    HyperNode (..),
+    PortDir (..),
+    PortEnd (..),
+    Wire (..),
+    hyperEquiv,
+    normalise,
   )
 import Circuit.Process (scan)
 import Control.Exception (ErrorCall, evaluate, try)
@@ -612,15 +625,72 @@ main = do
     -- The DSL is a deep embedding: skeleton extracts the drawing syntax.
     let f = lens (+ 1) (\_ d -> d - 1) :: Morphism (Mono Int Int) (Mono Int Int)
     assert "skeleton wire" $ skeleton wire == SWire
-    assert "skeleton box" $ skeleton (box f) == SBox "box"
-    assert "skeleton labelled box" $ skeleton (boxLabelled "f" f) == SBox "f"
+    assert "skeleton box" $ skeleton (box f) == SBox "box" 1 1
+    assert "skeleton labelled box" $ skeleton (boxLabelled "f" f) == SBox "f" 1 1
     assert "skeleton beside" $
-      skeleton (beside (box f) wire) == SBeside (SBox "box") SWire
+      skeleton (beside (box f) wire) == SBeside (SBox "box" 1 1) SWire
     assert "skeleton thenD" $
-      skeleton (box f `thenD` box f) == SThenD (SBox "box") (SBox "box")
+      skeleton (box f `thenD` box f) == SThenD (SBox "box" 1 1) (SBox "box" 1 1)
     assert "skeleton bend/bend'" $
       skeleton bend == SBend && skeleton bend' == SBend'
     assert "skeleton swap" $ skeleton swap == SSwap
+
+  ----------------------------------------------------------------------
+  -- Phase 4b: hypergraph normal form — spiders and the bialgebra
+  ----------------------------------------------------------------------
+  putStrLn "Phase 4b: hypergraph normal form"
+  do
+    -- Bialgebra, mirroring the stream-level pin in Free.Agent.Hyper:
+    -- copy . merge == (merge ⊗ merge) . middleSwap . (copy ⊗ copy),
+    -- where middleSwap is ((a,b),(c,d)) → ((a,c),(b,d)).  Both sides
+    -- fuse to a single spider connecting all four boundary ports.
+    let middleSwap = SBeside SWire (SBeside SSwap SWire)
+        lhs = SThenD sMerge sCopy
+        rhs =
+          SThenD
+            (SBeside sCopy sCopy)
+            (SThenD middleSwap (SBeside sMerge sMerge))
+    assert "bialgebra: copy . merge == (merge ⊗ merge) . middleSwap . (copy ⊗ copy)" $
+      hyperEquiv lhs rhs
+    -- Sanity: the bialgebra fails without the middle swap.
+    assert "bialgebra needs the middle swap" $
+      not (hyperEquiv lhs (SThenD (SBeside sCopy sCopy) (SBeside sMerge sMerge)))
+
+  do
+    -- Spider laws: associativity and unit, up to spider fusion.
+    assert "spider left associativity: (copy ⊗ id) . copy ≡ spider 1→3" $
+      hyperEquiv (SThenD sCopy (SBeside sCopy SWire)) (SSpider 1 3)
+    assert "spider right associativity: (id ⊗ copy) . copy ≡ spider 1→3" $
+      hyperEquiv (SThenD sCopy (SBeside SWire sCopy)) (SSpider 1 3)
+    assert "spider unit: (delete ⊗ id) . copy ≡ id" $
+      hyperEquiv (SThenD sCopy (SBeside sDelete SWire)) SWire
+    assert "spider unit (right): (id ⊗ delete) . copy ≡ id" $
+      hyperEquiv (SThenD sCopy (SBeside SWire sDelete)) SWire
+
+  do
+    -- Composition sanity: a chain is two boxes joined by one internal
+    -- wire; the parallel tensor is not.
+    let chain = SThenD (SBox "f" 1 1) (SBox "g" 1 1)
+        parallel = SBeside (SBox "f" 1 1) (SBox "g" 1 1)
+    assert "chain normalises to two boxes and one internal wire" $
+      normalise chain
+        == HyperGraph
+          { hgInArity = 1,
+            hgOutArity = 1,
+            hgNodes = [HyperNode "f" 1 1, HyperNode "g" 1 1],
+            hgWires =
+              [ Wire [] [PortEnd "f" Out 0, PortEnd "g" In 0],
+                Wire [InB 0] [PortEnd "f" In 0],
+                Wire [OutB 0] [PortEnd "g" Out 0]
+              ]
+          }
+    assert "chain is not the parallel tensor" $
+      not (hyperEquiv chain parallel)
+    -- Tree shape is irrelevant: only connectivity survives.
+    assert "normal form is tree-shape invariant" $
+      hyperEquiv
+        (SThenD (SThenD (SBox "f" 1 1) (SBox "g" 1 1)) SWire)
+        (SThenD (SBox "f" 1 1) (SThenD (SBox "g" 1 1) SWire))
 
   ----------------------------------------------------------------------
   -- Phase 5: profunctor optics — prisms

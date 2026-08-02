@@ -19,6 +19,13 @@
 -- That lets us interpret a diagram either as an executable 'IntMorph' (via
 -- 'runDiagram') or as an untyped drawing skeleton (via 'skeleton') for a
 -- renderer such as @chart-svg@.
+--
+-- The skeleton also carries hypergraph syntax: multi-port boxes and
+-- spiders ('SSpider', with 'sCopy' \/ 'sMerge' \/ 'sDelete' \/ 'sCreate'
+-- as the usual generators).  Spiders are drawing-level syntax only —
+-- there are deliberately no spider constructors in the typed 'Diagram'
+-- GADT, so 'skeleton' never produces one.  Structural comparison of the
+-- hyper fragment lives in "Circuit.Poly.StringDiagram.Hyper".
 module Circuit.Poly.StringDiagram
   ( -- * String-diagram vocabulary
     Wire,
@@ -46,6 +53,10 @@ module Circuit.Poly.StringDiagram
     -- * Drawing skeleton
     SDiagram (..),
     skeleton,
+    sCopy,
+    sMerge,
+    sDelete,
+    sCreate,
   )
 where
 
@@ -69,8 +80,12 @@ type Wire a da = IN a da
 data SDiagram
   = -- | Straight identity wire.
     SWire
-  | -- | Box with a label.
-    SBox String
+  | -- | Box with a label, a number of input ports and a number of output
+    -- ports.
+    SBox String Int Int
+  | -- | Spider node with an input arity and an output arity (hypergraph
+    -- junction: all its ports share one wire class).
+    SSpider Int Int
   | -- | Prism box.
     SPrismBox
   | -- | Two diagrams side by side (tensor product).
@@ -98,6 +113,22 @@ data SDiagram
   | -- | Symmetric braiding @A \u2297 B -> B \u2297 A@.
     SSwap
   deriving (Eq, Show)
+
+-- | Copy spider: one input forked to two outputs.
+sCopy :: SDiagram
+sCopy = SSpider 1 2
+
+-- | Merge spider: two inputs joined to one output.
+sMerge :: SDiagram
+sMerge = SSpider 2 1
+
+-- | Delete spider: erases one input.
+sDelete :: SDiagram
+sDelete = SSpider 1 0
+
+-- | Create spider: produces one output from nothing.
+sCreate :: SDiagram
+sCreate = SSpider 0 1
 
 -- | Internal deep embedding of a typed string diagram.
 --
@@ -143,7 +174,7 @@ skeleton (Diagram d) = go d
   where
     go :: Diagram_ a' da' b' db' -> SDiagram
     go Wire_ = SWire
-    go (Box_ lbl _) = SBox lbl
+    go (Box_ lbl _) = SBox lbl 1 1
     go (PrismBox_ _ _) = SPrismBox
     go (Beside_ f g) = SBeside (go f) (go g)
     go (ThenD_ f g) = SThenD (go f) (go g)
