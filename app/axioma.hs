@@ -16,7 +16,7 @@ import Circuit.Poly.DiffP
     traceDiffPD,
     traceDiffPMatrix,
   )
-import Circuit.Poly.Process
+import Circuit.ChannelPoly
   ( Coalgebra (..),
     Step,
     SumStep (..),

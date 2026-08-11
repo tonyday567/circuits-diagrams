@@ -13,7 +13,7 @@ Paste into `cabal repl` from the `string-diagrams` root.
 
 ```haskell
 import Circuit.Poly
-import Circuit.Poly.Process
+import Circuit.ChannelPoly
 ```
 
 ## the second ⟜ the tape agent
