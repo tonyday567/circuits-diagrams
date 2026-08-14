@@ -38,7 +38,7 @@ import NumHask.Algebra.Additive qualified as NHA
 import NumHask.Algebra.Multiplicative qualified as NHM
 import NumHask.Algebra.Ring qualified as NHR
 import NumHask.Free.Carriers (FieldStar (..))
-import Harpie.NumHask.Matrix (Matrix, fromLists, matVec, starMatrix, toLists)
+import Circuit.Mat.Dense (Matrix, fromLists, matVec, starMatrix, toLists)
 import Circuit.Poly (Mono, Morphism, Poly (..), Morphism (..), applyLens, lens)
 import Prelude hiding (id, (.))
 

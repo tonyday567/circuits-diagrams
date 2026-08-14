@@ -67,9 +67,10 @@ library
 
   build-depends:
     base >=4.18 && <5,
-    circuits >=0.3 && <0.4,
+    circuits >=0.3 && <0.5,
     circuits-ad >=0.1 && <0.2,
-    harpie-numhask >=0.2 && <0.3,
+    circuits-mat >=0.1 && <0.2,
+    harpie >=0.3 && <0.4,
     numhask,
 
 executable string-diagrams-axioma
@@ -79,7 +80,7 @@ executable string-diagrams-axioma
   main-is: axioma.hs
   build-depends:
     base >=4.18 && <5,
-    circuits >=0.3 && <0.4,
+    circuits >=0.3 && <0.5,
     string-diagrams,
     circuits-ad,
     numhask,
