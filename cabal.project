@@ -1,9 +1,9 @@
 packages:
   .
   ../circuits
-  ../circuits-ad
+  ../circuits-diff
   ../numhask/numhask.cabal
-  ../numhask-diff/numhask-diff.cabal
+  ../circuits-diff/circuits-diff.cabal
   ../harpie/harpie.cabal
   ../process-stats/process-stats.cabal
   ../circuits-mat/circuits-mat.cabal

@@ -5,7 +5,7 @@
 
 module Main (main) where
 
-import Circuit.AD.Param (DiffP (..), splitP)
+import Circuit.Diff.Param (DiffP (..), splitP)
 import Circuit.Category ((.))
 import Circuit.Poly
 import Circuit.Poly.DiffP

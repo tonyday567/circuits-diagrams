@@ -12,7 +12,7 @@
 --
 -- This gives the "shared parameter" reading of 'DiffP' a home in 'Poly': the
 -- parameter is the index of a lens family, not an extra layer. The
--- paired-parameter reading ('Circuit.AD.Param.splitP', 'joinP') remains
+-- paired-parameter reading ('Circuit.Diff.Param.splitP', 'joinP') remains
 -- available for independent-layer composition.
 module Circuit.Poly.DiffP
   ( -- * DiffP as a parameter-indexed lens family
@@ -30,7 +30,7 @@ module Circuit.Poly.DiffP
   )
 where
 
-import Circuit.AD.Param (DiffP (..))
+import Circuit.Diff.Param (DiffP (..))
 import Circuit.Category (Category (..), ObDict (..))
 import Circuit.Channel (Channel (..), Strength (..))
 import Circuit.Dagger (MergeZero (..))
