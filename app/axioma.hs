@@ -7,7 +7,8 @@ module Main (main) where
 
 import Circuit.Diff.Param (DiffP (..), splitP)
 import Circuit.Category ((.))
-import Circuit.Poly
+import Circuit.Poly hiding (runSystem)
+import qualified Circuit.Poly as Poly
 import Circuit.Poly.DiffP
   ( diffPAsFamily,
     diffPAt,
@@ -179,13 +180,13 @@ type MonoC a da = 'CProd ('CConst a) ('CExp da)
 
 -- | Extract the underlying arrow from a 'System'.
 runSystemArr :: System arr s p -> arr (s, Dir p) (s, Pos p)
-runSystemArr (System f) = f
+runSystemArr = Poly.runSystem
 
 -- | Embed a parameterised lens @(s, i) -> (s, o)@ as a 'System' over the
 -- monomial @Mono i o@.  The state channel is preserved so the resulting
 -- system can be traced.
 diffPMono :: DiffP p (s, i) (s, o) -> System (DiffP p) s (Mono i o)
-diffPMono (DiffP f) = System $ DiffP $ \p0 (s, d) ->
+diffPMono (DiffP f) = Poly.system $ DiffP $ \p0 (s, d) ->
   let i = case d of Right x -> x; Left v -> absurd v
       ((s', o), back) = f p0 (s, i)
       back' (ds', (do', ())) =
@@ -779,7 +780,7 @@ main = do
     -- depend on the current input direction.
     let sys :: System (->) Int (Mono Int Int)
         sys = fromEvalSystem $ \s -> EP (EK s, EE (\o -> s + o))
-        System f = sys
+        f = Poly.runSystem sys
         (_, pos1) = f (5, Right 10)
         (_, pos2) = f (5, Right 20)
         (_, pos3) = f (7, Right 10)
