@@ -114,7 +114,7 @@ calculation.  The picture tells you what the linear algebra is doing.
   string-diagram surface syntax.
 - `strings-svg` — renders the `SDiagram` sketches as SVG equality galleries.
 - `circuits-ad` — automatic differentiation for lenses.
-- `process-stats` — statistical boxes built on `Circuit.Process` (the arrow
+- `circuits-stats` — statistical boxes built on `Circuit.Process` (the arrow
   formerly hand-rolled in `mealy`).
 
 ## Status
