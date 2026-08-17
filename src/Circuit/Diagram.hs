@@ -57,6 +57,11 @@ data SDiagram
     SAssoc'
   | -- | Symmetric braiding @A ⊗ B -> B ⊗ A@.
     SSwap
+  | -- | Trace: hide the last input/output pair as a feedback loop.
+    --
+    -- A value @STrace d@ represents a diagram @d@ whose last input and last
+    -- output are connected, removing one port from each boundary.
+    STrace SDiagram
   deriving (Eq, Show)
 
 -- | Copy spider: one input forked to two outputs.

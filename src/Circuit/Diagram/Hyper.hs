@@ -101,6 +101,9 @@ arity = \case
   SAssoc -> (3, 3)
   SAssoc' -> (3, 3)
   SSwap -> (2, 2)
+  STrace d ->
+    let (i, o) = arity d
+     in (i - 1, o - 1)
 
 -- | Interpret a diagram as its hypergraph normal form.
 --
@@ -231,6 +234,12 @@ go d b0 = case d of
         (b3, o0) = fresh b2
         (b4, o1) = fresh b3
      in (unite i0 o1 (unite i1 o0 b4), ([i0, i1], [o0, o1]))
+  STrace d' ->
+    let (b1, (ins, outs)) = go d' b0
+        initLast xs = splitAt (length xs - 1) xs
+     in case (initLast ins, initLast outs) of
+          ((is, [i]), (os, [o])) -> (unite i o b1, (is, os))
+          _ -> (b1, (ins, outs))
 
 -- | A port end while grouping: either a boundary port or a node port.
 data End = BoundaryE BoundaryEnd | PortE PortEnd

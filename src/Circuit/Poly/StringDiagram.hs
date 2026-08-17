@@ -46,6 +46,7 @@ module Circuit.Poly.StringDiagram
     assoc',
     swap,
     prismBox,
+    traceD,
 
     -- * Running a diagram
     runDiagram,
@@ -61,6 +62,7 @@ module Circuit.Poly.StringDiagram
 where
 
 import Circuit.Category qualified as Cat
+import Circuit.Channel (Traced (..))
 import Circuit.Diagram (SDiagram (..), sCopy, sCreate, sDelete, sMerge)
 import Circuit.Layer (run)
 import Circuit.Loop (Loop (..))
@@ -104,6 +106,9 @@ data Diagram_ a da b db where
     Diagram_ ((a, b), c) ((da, db), dc) (a, (b, c)) (da, (db, dc))
   Swap_ ::
     Diagram_ (a, b) (da, db) (b, a) (db, da)
+  Trace_ ::
+    Diagram_ (s, a) (s, da) (s, b) (s, db) ->
+    Diagram_ a da b db
 
 -- | A string diagram from one bundle of wires to another.
 --
@@ -131,6 +136,7 @@ skeleton (Diagram d) = go d
     go Assoc_ = SAssoc
     go Assoc'_ = SAssoc'
     go Swap_ = SSwap
+    go (Trace_ f) = STrace (go f)
 
 -- | Convert a deep-embedding diagram back to the executable Int corridor.
 toIntMorph :: Diagram a da b db -> IntMorph (,) (Loop (,) (->)) a da b db
@@ -157,6 +163,19 @@ toIntMorph (Diagram d) = case d of
   Assoc_ -> IntMorph (Lift (runIntMorph Int.tensorAssoc))
   Assoc'_ -> IntMorph (Lift (runIntMorph Int.tensorAssoc'))
   Swap_ -> IntMorph (Lift (runIntMorph Int.braid))
+  Trace_ f -> traceIntMorph (toIntMorph (Diagram f))
+  where
+    traceIntMorph ::
+      IntMorph (,) (Loop (,) (->)) (s, a) (s, da) (s, b) (s, db) ->
+      IntMorph (,) (Loop (,) (->)) a da b db
+    traceIntMorph (IntMorph body) =
+      IntMorph
+        ( trace
+            ( Lift (\((s1, s2), (da, b)) -> ((s1, da), (s2, b)))
+                Cat.. body
+                Cat.. Lift (\((s1, s2), (a, db)) -> ((s1, a), (s2, db)))
+            )
+        )
 
 -- | The identity diagram: a straight wire.
 --
@@ -201,6 +220,14 @@ thenD ::
   Diagram bp bm cp cm ->
   Diagram ap am cp cm
 thenD (Diagram f) (Diagram g) = Diagram (ThenD_ f g)
+
+-- | Hide a feedback wire: trace over the state @s@.
+--
+-- The body has one extra input/output pair @s@ that is fed back to itself.
+traceD ::
+  Diagram (s, a) (s, da) (s, b) (s, db) ->
+  Diagram a da b db
+traceD (Diagram f) = Diagram (Trace_ f)
 
 -- | Introduce two wires from nothing to form a cap (unit).
 --

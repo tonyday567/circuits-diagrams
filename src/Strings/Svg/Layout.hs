@@ -114,6 +114,7 @@ layoutSDiagram = go 0
       SAssoc -> multiWireL 3
       SAssoc' -> multiWireL 3
       SSwap -> swapL
+      STrace d -> go n d
 
 boxCount :: SDiagram -> Int
 boxCount = \case
@@ -122,6 +123,7 @@ boxCount = \case
   SBeside a b -> boxCount a + boxCount b
   SThenD a b -> boxCount a + boxCount b
   STurn d -> boxCount d
+  STrace d -> boxCount d
   _ -> 0
 
 boxStroke :: Int -> Colour

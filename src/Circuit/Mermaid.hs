@@ -69,6 +69,17 @@ import Prelude
 --   n0["∪"]
 --   in0 -->|i0| n0
 --   in1 -->|i1| n0
+--
+-- A trace hides the last input/output pair as a feedback loop:
+--
+-- >>> putStr (toMermaid (STrace (SBox "f" 2 2)))
+-- flowchart LR
+--   in0(["in 0"])
+--   out0(["out 0"])
+--   n0["f"]
+--   n0 -->|o1:i1| n0
+--   in0 -->|i0| n0
+--   n0 -->|o0| out0
 toMermaid :: SDiagram -> String
 toMermaid = render . normalise
 
