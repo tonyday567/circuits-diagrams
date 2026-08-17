@@ -5,7 +5,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | The span fragment of polynomial functors.
@@ -211,15 +210,15 @@ instance NetlistC ('CExp a) where
 instance (NetlistC p, NetlistC q) => NetlistC ('CSum p q) where
   toNetC (ESC (Left u)) =
     let (i, f) = toNetC u
-     in ( Left i
-        , \case
+     in ( Left i,
+          \case
             Left d -> f d
             Right _ -> Nothing
         )
   toNetC (ESC (Right v)) =
     let (j, g) = toNetC v
-     in ( Right j
-        , \case
+     in ( Right j,
+          \case
             Left _ -> Nothing
             Right e -> g e
         )
@@ -234,16 +233,16 @@ instance
   toNetC (EPC (u, v)) =
     let (i, f) = toNetC u
         (j, g) = toNetC v
-     in ( (i, j)
-        , \case
+     in ( (i, j),
+          \case
             Left (d, j') -> if j' == j then f d else Nothing
             Right (i', e) -> if i' == i then g e else Nothing
         )
 
   fromNetC (i, j) h =
     EPC
-      ( fromNetC i (\d -> h (Left (d, j)))
-      , fromNetC j (\e -> h (Right (i, e)))
+      ( fromNetC i (\d -> h (Left (d, j))),
+        fromNetC j (\e -> h (Right (i, e)))
       )
 
 instance NetlistC ('CTensor p q) where
@@ -260,7 +259,7 @@ instance NetlistC ('CComp p q) where
 -- @'fromNetC' ('toNetC' v) ≡ v@.  It is exact for every constructor.  The
 -- reverse direction @'toNetC' ('fromNetC' i h) ≡ (i, h)@ holds exactly when @h@
 -- respects the fibre, and fails otherwise.
-netRoundTripC :: NetlistC c => EvalC c x -> EvalC c x
+netRoundTripC :: (NetlistC c) => EvalC c x -> EvalC c x
 netRoundTripC v = uncurry fromNetC (toNetC v)
 
 -- | Test whether a direction lies in the fibre of a given position.

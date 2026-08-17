@@ -1,6 +1,8 @@
 -- | Structural oracles for string-diagram layout.
 module Main (main) where
 
+import Chart (Point (..))
+import Circuit.Poly (lens)
 import Circuit.Poly.StringDiagram
   ( SDiagram (..),
     beside,
@@ -13,8 +15,6 @@ import Circuit.Poly.StringDiagram
     thenD,
     wire,
   )
-import Chart (Point (..))
-import Circuit.Poly (lens)
 import Strings.Svg.Layout
 import System.Exit (exitFailure)
 import Prelude

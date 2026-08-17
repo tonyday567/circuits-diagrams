@@ -30,16 +30,16 @@ module Circuit.Poly.DiffP
   )
 where
 
-import Circuit.Diff.Param (DiffP (..))
 import Circuit.Category (Category (..), ObDict (..))
 import Circuit.Channel (Channel (..), Strength (..))
 import Circuit.Dagger (MergeZero, Zero (..))
+import Circuit.Diff.Param (DiffP (..))
+import Circuit.Mat.Dense (Matrix, fromLists, matVec, starMatrix, toLists)
+import Circuit.Poly (Mono, Morphism (..), Poly (..), applyLens, lens)
 import NumHask.Algebra.Additive qualified as NHA
 import NumHask.Algebra.Multiplicative qualified as NHM
 import NumHask.Algebra.Ring qualified as NHR
 import NumHask.Free.Carriers (FieldStar (..))
-import Circuit.Mat.Dense (Matrix, fromLists, matVec, starMatrix, toLists)
-import Circuit.Poly (Mono, Morphism, Poly (..), Morphism (..), applyLens, lens)
 import Prelude hiding (id, (.))
 
 -- | The lens at a fixed parameter value.
@@ -160,9 +160,10 @@ traceDiffPD j0 tol maxIter (DiffP body) = DiffP $ \p0 i ->
          in (di, dp)
    in if abs (aNext - a) > tol
         then error ("traceDiffPD: primal fixed point did not converge within " ++ show maxIter ++ " iterations")
-        else if abs aJ >= 1.0
-          then error ("traceDiffPD: feedback Jacobian |" ++ show aJ ++ "| >= 1 is outside the contractive regime")
-          else (o, pullback)
+        else
+          if abs aJ >= 1.0
+            then error ("traceDiffPD: feedback Jacobian |" ++ show aJ ++ "| >= 1 is outside the contractive regime")
+            else (o, pullback)
 
 -- | Star-based trace for a vector-channel 'DiffP'.
 --
