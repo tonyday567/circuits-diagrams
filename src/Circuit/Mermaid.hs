@@ -19,13 +19,20 @@
 -- * 'STurn' is opaque (the hypergraph stores it as a @turn@ node), and
 --   node identity is by label, as in the hypergraph normal form: two
 --   boxes with the same label collapse to one mermaid node.
-module Circuit.Poly.StringDiagram.Mermaid
+module Circuit.Mermaid
   ( toMermaid,
     hyperToMermaid,
+
+    -- * Drawing vocabulary re-exported from "Circuit.Poly.StringDiagram"
+    SDiagram (..),
+    sCopy,
+    sMerge,
+    sDelete,
+    sCreate,
   )
 where
 
-import Circuit.Poly.StringDiagram (SDiagram)
+import Circuit.Poly.StringDiagram (SDiagram (..), sCopy, sCreate, sDelete, sMerge)
 import Circuit.Poly.StringDiagram.Hyper
   ( BoundaryEnd (..),
     HyperGraph (..),
@@ -39,7 +46,7 @@ import Data.List (nub)
 import Prelude
 
 -- $setup
--- >>> import Circuit.Poly.StringDiagram
+-- >>> import Circuit.Mermaid
 
 -- | Print a diagram skeleton as a mermaid flowchart.
 --
