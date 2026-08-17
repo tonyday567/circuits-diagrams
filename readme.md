@@ -1,4 +1,4 @@
-# string-diagrams
+# circuits-diagrams
 
 > String-diagram surface syntax and polynomial applications for circuits.
 
@@ -64,7 +64,7 @@ The package is one machinery pipeline with no deviation:
 4. **String diagrams** (`Circuit.Poly.StringDiagram`).
    A deep-embedded DSL for drawing the morphisms above.  Every value
    remembers how it was built, so the same diagram can be interpreted as an
-   executable `IntMorph` or rendered as an SVG via `strings-svg`.
+   executable `IntMorph` or rendered as an SVG via `Strings.Svg`.
 
 The pipeline is natural: polynomials give the objects, lenses give the
 morphisms, the Int construction gives feedback, and string diagrams give the
@@ -76,7 +76,7 @@ leave strings, because dependent types want explicit indices and proof terms,
 not wire-and-box pictures.  This library stays in the polynomial/string
 world.)
 
-## Why `string-diagrams`
+## Why `circuits-diagrams`
 
 `circuits-int` named only the middle engine, and `circuits-poly` named the
 polynomial substrate.  Now that the polynomial core lives in `circuits`, this
@@ -84,7 +84,7 @@ package is the user-facing grammar layer: string diagrams and related
 polynomial applications built on top of the semantic machinery.
 
 ```
-string-diagrams  =  String diagrams
+circuits-diagrams  =  String diagrams
                   +  Spans
                   +  Int corridor
                   +  Differential polynomials
@@ -110,9 +110,8 @@ calculation.  The picture tells you what the linear algebra is doing.
 
 - `circuits` — the base category language: `Category`, `Tensor`, `Channel`,
   `Traced`, `CopyDiscard`, `MergeZero`.
-- `string-diagrams` — this package: polynomial lenses, the Int corridor, and the
-  string-diagram surface syntax.
-- `strings-svg` — renders the `SDiagram` sketches as SVG equality galleries.
+- `circuits-diagrams` — this package: polynomial lenses, the Int corridor, the
+  string-diagram surface syntax, and SVG rendering of the diagrams.
 - `circuits-ad` — automatic differentiation for lenses.
 - `circuits-stats` — statistical boxes built on `Circuit.Process` (the arrow
   formerly hand-rolled in `mealy`).

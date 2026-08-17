@@ -1,4 +1,4 @@
--- | String-diagram SVG rendering for @string-diagrams@ via @chart-svg@.
+-- | String-diagram SVG rendering for @circuits-diagrams@ via @chart-svg@.
 --
 -- Pipeline:
 --
@@ -8,7 +8,7 @@
 -- 4. 'renderLayout' / 'renderSDiagram' → 'ChartOptions'.
 -- 5. 'writeChartOptions' → SVG file.
 module Strings.Svg
-  ( -- * Re-exports from string-diagrams
+  ( -- * Re-exports from circuits-diagrams
     module Circuit.Poly.StringDiagram,
 
     -- * Layout

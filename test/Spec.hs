@@ -38,7 +38,7 @@ ptsApprox ps qs = length ps == length qs && and (zipWith ptApprox ps qs)
 
 main :: IO ()
 main = do
-  putStrLn "strings-svg structural oracles"
+  putStrLn "string-diagram structural oracles"
 
   let w = layoutSDiagram (skeleton wire)
   assert "skeleton wire is one line" $ countLines w == 1 && countRects w == 0

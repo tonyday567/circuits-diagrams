@@ -9,7 +9,7 @@ tags: [agent, system, process, sketch]
 > an agent is the second pretending to be the first: it presents a
 > compressed-state interface, but under the hood it's re-folding the tape.
 
-Paste into `cabal repl` from the `string-diagrams` root.
+Paste into `cabal repl` from the `circuits-diagrams` root.
 
 ```haskell
 import Circuit.Poly
