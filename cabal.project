@@ -1,14 +1,5 @@
-packages:
-  .
-  ../circuits
-  ../circuits-diff
-  ../numhask/numhask.cabal
-  ../circuits-diff/circuits-diff.cabal
-  ../harpie/harpie.cabal
-  ../circuits-stats/circuits-stats.cabal
-  ../circuits-mat/circuits-mat.cabal
+packages: .
 
 write-ghc-environment-files: always
-
 package recursion-schemes
   flags: -template-haskell
