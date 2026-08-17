@@ -73,8 +73,9 @@ library
   hs-source-dirs: src
   exposed-modules:
     Circuit.Poly.Int
+    Circuit.Diagram
+    Circuit.Diagram.Hyper
     Circuit.Poly.StringDiagram
-    Circuit.Poly.StringDiagram.Hyper
     Circuit.Poly.Span
     Circuit.Poly.DiffP
     Circuit.Mermaid

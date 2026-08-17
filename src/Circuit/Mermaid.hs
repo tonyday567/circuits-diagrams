@@ -2,8 +2,7 @@
 --
 -- Test-only pin: emit an 'SDiagram' as a mermaid @flowchart@ so diagrams
 -- render anywhere markdown does (org/emacs, GitHub), before any chart-svg
--- layout work.  The printer consumes the hypergraph normal form
--- ("Circuit.Poly.StringDiagram.Hyper"), so spiders and swaps vanish into
+-- layout work.  The printer consumes the hypergraph normal form ("Circuit.Diagram.Hyper"), so spiders and swaps vanish into
 -- port connectivity and structural laws show up as plain edges — a
 -- copy-then-merge round trip prints as a single wire.
 --
@@ -24,8 +23,8 @@ module Circuit.Mermaid
   )
 where
 
-import Circuit.Poly.StringDiagram (SDiagram)
-import Circuit.Poly.StringDiagram.Hyper
+import Circuit.Diagram (SDiagram)
+import Circuit.Diagram.Hyper
   ( BoundaryEnd (..),
     HyperGraph (..),
     HyperNode (..),

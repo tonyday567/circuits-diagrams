@@ -15,7 +15,7 @@
 -- box label, so two boxes carrying the same label are interchangeable.
 -- That is exact for the oracle suite and cheap; revisit if unlabelled
 -- node isomorphism ever matters.
-module Circuit.Poly.StringDiagram.Hyper
+module Circuit.Diagram.Hyper
   ( HyperGraph (..),
     HyperNode (..),
     Wire (..),
@@ -28,7 +28,7 @@ module Circuit.Poly.StringDiagram.Hyper
   )
 where
 
-import Circuit.Poly.StringDiagram (SDiagram (..))
+import Circuit.Diagram (SDiagram (..))
 import Data.List (foldl', groupBy, sort, sortOn)
 import Prelude
 
@@ -121,9 +121,10 @@ normalise d =
     }
   where
     (b, (ins, outs)) = go d emptyBuild
-    rootOf p = findRoot (parent b) p
+    rootOf = findRoot (parent b)
     classes =
-      groupBy (\e e' -> rootOf (fst e) == rootOf (fst e'))
+      groupBy
+        (\e e' -> rootOf (fst e) == rootOf (fst e'))
         (sortOn (rootOf . fst) allEnds)
     allEnds =
       [(p, BoundaryE (InB ix)) | (ix, p) <- zip [0 ..] ins]
@@ -203,7 +204,7 @@ go d b0 = case d of
         (b2, outs) = freshPorts n b1
         b3 = case ins ++ outs of
           [] -> b2
-          (p : ps) -> foldl' (\bb q -> unite p q bb) b2 ps
+          (p : ps) -> foldl' (flip (unite p)) b2 ps
      in (b3, (ins, outs))
   SPrismBox -> node "prism" 1 1 b0
   SBeside f g ->

@@ -5,18 +5,7 @@
 
 module Main (main) where
 
-import Circuit.Diff.Param (DiffP (..), splitP)
 import Circuit.Category ((.))
-import Circuit.Poly hiding (runSystem)
-import qualified Circuit.Poly as Poly
-import Circuit.Poly.DiffP
-  ( diffPAsFamily,
-    diffPAt,
-    diffPFromFamily,
-    diffPParamGrad,
-    traceDiffPD,
-    traceDiffPMatrix,
-  )
 import Circuit.ChannelPoly
   ( Coalgebra (..),
     Step,
@@ -35,6 +24,27 @@ import Circuit.ChannelPoly
     systemAsLens,
     systemAsProcess,
     systemToCoalgebraMono,
+  )
+import Circuit.Diagram.Hyper
+  ( BoundaryEnd (..),
+    HyperGraph (..),
+    HyperNode (..),
+    PortDir (..),
+    PortEnd (..),
+    Wire (..),
+    hyperEquiv,
+    normalise,
+  )
+import Circuit.Diff.Param (DiffP (..), splitP)
+import Circuit.Poly hiding (runSystem)
+import Circuit.Poly qualified as Poly
+import Circuit.Poly.DiffP
+  ( diffPAsFamily,
+    diffPAt,
+    diffPFromFamily,
+    diffPParamGrad,
+    traceDiffPD,
+    traceDiffPMatrix,
   )
 import Circuit.Poly.Span
   ( DirC,
@@ -78,16 +88,6 @@ import Circuit.Poly.StringDiagram
     unitR,
     unitR',
     wire,
-  )
-import Circuit.Poly.StringDiagram.Hyper
-  ( BoundaryEnd (..),
-    HyperGraph (..),
-    HyperNode (..),
-    PortDir (..),
-    PortEnd (..),
-    Wire (..),
-    hyperEquiv,
-    normalise,
   )
 import Circuit.Process (scan)
 import Control.Exception (ErrorCall, evaluate, try)

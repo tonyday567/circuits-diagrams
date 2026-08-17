@@ -25,7 +25,7 @@
 -- as the usual generators).  Spiders are drawing-level syntax only —
 -- there are deliberately no spider constructors in the typed 'Diagram'
 -- GADT, so 'skeleton' never produces one.  Structural comparison of the
--- hyper fragment lives in "Circuit.Poly.StringDiagram.Hyper".
+-- hyper fragment lives in "Circuit.Diagram.Hyper".
 module Circuit.Poly.StringDiagram
   ( -- * String-diagram vocabulary
     Wire,
@@ -50,7 +50,7 @@ module Circuit.Poly.StringDiagram
     -- * Running a diagram
     runDiagram,
 
-    -- * Drawing skeleton
+    -- * Drawing skeleton (re-exported from "Circuit.Diagram")
     SDiagram (..),
     skeleton,
     sCopy,
@@ -61,6 +61,7 @@ module Circuit.Poly.StringDiagram
 where
 
 import Circuit.Category qualified as Cat
+import Circuit.Diagram (SDiagram (..), sCopy, sCreate, sDelete, sMerge)
 import Circuit.Layer (run)
 import Circuit.Loop (Loop (..))
 import Circuit.Poly (Mono, Morphism, applyLens)
@@ -71,64 +72,6 @@ import Prelude hiding (id, (.))
 
 -- | A wire is a forward type paired with a backward type.
 type Wire a da = IN a da
-
--- | Untyped drawing syntax for a string diagram.
---
--- This is what a renderer consumes.  It discards the Haskell types but
--- keeps the layout structure: boxes, wires, bends, swaps, composition and
--- tensor.
-data SDiagram
-  = -- | Straight identity wire.
-    SWire
-  | -- | Box with a label, a number of input ports and a number of output
-    -- ports.
-    SBox String Int Int
-  | -- | Spider node with an input arity and an output arity (hypergraph
-    -- junction: all its ports share one wire class).
-    SSpider Int Int
-  | -- | Prism box.
-    SPrismBox
-  | -- | Two diagrams side by side (tensor product).
-    SBeside SDiagram SDiagram
-  | -- | Two diagrams chained (composition).
-    SThenD SDiagram SDiagram
-  | -- | Cup (counit): bends two wires back to the unit.
-    SBend
-  | -- | Cap (unit): introduces two wires from the unit.
-    SBend'
-  | -- | Dual (rotate 180°).
-    STurn SDiagram
-  | -- | Left unitor @I \u2297 A -> A@.
-    SUnitL
-  | -- | Inverse left unitor @A -> I \u2297 A@.
-    SUnitL'
-  | -- | Right unitor @A \u2297 I -> A@.
-    SUnitR
-  | -- | Inverse right unitor @A -> A \u2297 I@.
-    SUnitR'
-  | -- | Associator @A \u2297 (B \u2297 C) -> (A \u2297 B) \u2297 C@.
-    SAssoc
-  | -- | Inverse associator @(A \u2297 B) \u2297 C -> A \u2297 (B \u2297 C)@.
-    SAssoc'
-  | -- | Symmetric braiding @A \u2297 B -> B \u2297 A@.
-    SSwap
-  deriving (Eq, Show)
-
--- | Copy spider: one input forked to two outputs.
-sCopy :: SDiagram
-sCopy = SSpider 1 2
-
--- | Merge spider: two inputs joined to one output.
-sMerge :: SDiagram
-sMerge = SSpider 2 1
-
--- | Delete spider: erases one input.
-sDelete :: SDiagram
-sDelete = SSpider 1 0
-
--- | Create spider: produces one output from nothing.
-sCreate :: SDiagram
-sCreate = SSpider 0 1
 
 -- | Internal deep embedding of a typed string diagram.
 --
