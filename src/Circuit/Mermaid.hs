@@ -21,18 +21,10 @@
 --   boxes with the same label collapse to one mermaid node.
 module Circuit.Mermaid
   ( toMermaid,
-    hyperToMermaid,
-
-    -- * Drawing vocabulary re-exported from "Circuit.Poly.StringDiagram"
-    SDiagram (..),
-    sCopy,
-    sMerge,
-    sDelete,
-    sCreate,
   )
 where
 
-import Circuit.Poly.StringDiagram (SDiagram (..), sCopy, sCreate, sDelete, sMerge)
+import Circuit.Poly.StringDiagram (SDiagram)
 import Circuit.Poly.StringDiagram.Hyper
   ( BoundaryEnd (..),
     HyperGraph (..),
@@ -47,6 +39,7 @@ import Prelude
 
 -- $setup
 -- >>> import Circuit.Mermaid
+-- >>> import Circuit.Poly.StringDiagram
 
 -- | Print a diagram skeleton as a mermaid flowchart.
 --
@@ -78,11 +71,11 @@ import Prelude
 --   in0 -->|i0| n0
 --   in1 -->|i1| n0
 toMermaid :: SDiagram -> String
-toMermaid = hyperToMermaid . normalise
+toMermaid = render . normalise
 
--- | Print a hypergraph normal form as a mermaid flowchart.
-hyperToMermaid :: HyperGraph -> String
-hyperToMermaid hg =
+-- Print a hypergraph normal form as a mermaid flowchart.
+render :: HyperGraph -> String
+render hg =
   unlines $
     ["flowchart LR"]
       ++ fmap inDecl [0 .. hgInArity hg - 1]
@@ -94,10 +87,10 @@ hyperToMermaid hg =
     nodeIdOf lbl = "n" ++ show (idxOf lbl)
     idxOf lbl = case [i | (i, n) <- zip [(0 :: Int) ..] nodes, hnLabel n == lbl] of
       (i : _) -> i
-      [] -> error "hyperToMermaid: port references unknown node"
+      [] -> error "render: port references unknown node"
     arityOf lbl = case [n | n <- nodes, hnLabel n == lbl] of
       (n : _) -> n
-      [] -> error "hyperToMermaid: port references unknown node"
+      [] -> error "render: port references unknown node"
 
     inDecl i = "  in" ++ show i ++ "([\"in " ++ show i ++ "\"])"
     outDecl i = "  out" ++ show i ++ "([\"out " ++ show i ++ "\"])"
