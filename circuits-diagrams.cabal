@@ -75,6 +75,7 @@ library
     Circuit.Poly.Int
     Circuit.Poly.StringDiagram
     Circuit.Poly.StringDiagram.Hyper
+    Circuit.Poly.StringDiagram.Mermaid
     Circuit.Poly.Span
     Circuit.Poly.DiffP
     Strings.Svg
