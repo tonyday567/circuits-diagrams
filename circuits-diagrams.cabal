@@ -72,13 +72,13 @@ library
   import: ghc2024-stanza
   hs-source-dirs: src
   exposed-modules:
-    Circuit.Poly.Int
     Circuit.Diagram
     Circuit.Diagram.Hyper
-    Circuit.Poly.StringDiagram
-    Circuit.Poly.Span
-    Circuit.Poly.DiffP
     Circuit.Mermaid
+    Circuit.Poly.DiffP
+    Circuit.Poly.Int
+    Circuit.Poly.Span
+    Circuit.Poly.StringDiagram
     Strings.Svg
     Strings.Svg.Examples
     Strings.Svg.Layout
@@ -110,6 +110,7 @@ executable circuits-diagrams-axioma
     circuits-diagrams,
     circuits-diff,
     numhask,
+
   default-language: GHC2024
 
 executable render-examples
@@ -120,8 +121,8 @@ executable render-examples
   hs-source-dirs: app
   build-depends:
     base >=4.18 && <5,
-    filepath >=1.4 && <1.6,
     circuits-diagrams,
+    filepath >=1.4 && <1.6,
 
 test-suite spec
   import: ghc-options-stanza
