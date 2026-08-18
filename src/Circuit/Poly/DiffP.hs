@@ -86,7 +86,6 @@ instance (MergeZero (->) p) => Strength (,) (DiffP p) where
             let (db, dp) = back dc
              in ((da, db), dp)
         )
-  withStrengthOb ObDict ObDict ObDict x = x
 
 -- | Star-based trace for 'DiffP'.
 --
