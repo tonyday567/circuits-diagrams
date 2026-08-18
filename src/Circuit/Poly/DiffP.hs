@@ -30,7 +30,7 @@ module Circuit.Poly.DiffP
   )
 where
 
-import Circuit.Category (Category (..), ObDict (..))
+import Circuit.Category (Category (..))
 import Circuit.Channel (Channel (..), Strength (..))
 import Circuit.Dagger (MergeZero, Zero (..))
 import Circuit.Diff.Param (DiffP (..))
