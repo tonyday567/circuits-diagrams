@@ -1,15 +1,39 @@
--- | Write the seven equality SVGs into a directory (default: @other/@).
+-- | Write the seven equality SVGs into a directory.
 module Main (main) where
 
 import Strings.Svg.Examples (writeAllExamples)
-import System.Environment (getArgs)
+import Options.Applicative
 import Prelude
+
+data Config = Config
+  { cfgDir :: FilePath
+  }
+  deriving (Show)
+
+configParser :: Parser Config
+configParser =
+  Config
+    <$> option
+      str
+      ( long "output"
+          <> short 'o'
+          <> metavar "DIR"
+          <> value "other"
+          <> showDefault
+          <> help "directory to write SVG examples into"
+      )
+
+opts :: ParserInfo Config
+opts =
+  info
+    (configParser <**> helper)
+    ( fullDesc
+        <> progDesc "Write string-diagram SVG examples"
+        <> header "render-examples - SVG example generator"
+    )
 
 main :: IO ()
 main = do
-  args <- getArgs
-  let dir = case args of
-        (d : _) -> d
-        [] -> "other"
-  writeAllExamples dir
-  putStrLn ("wrote string-diagram examples to " <> dir <> "/")
+  config <- execParser opts
+  writeAllExamples (cfgDir config)
+  putStrLn ("wrote string-diagram examples to " <> cfgDir config <> "/")

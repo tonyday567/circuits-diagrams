@@ -203,7 +203,7 @@ traceDiffPMatrix x0 tol maxIter (DiffP body) = DiffP $ \p0 i ->
       -- cotangent vector produced by a unit cotangent on channel k.
       cols = [fst (fst (backward (oneV k, zero ()))) | k <- [0 .. dim - 1]]
       -- Assemble rows: row i is [col_0 !! i, ..., col_{dim-1} !! i].
-      aMat = fromLists (map (map FieldStar) [[cols !! j !! k | j <- [0 .. dim - 1]] | k <- [0 .. dim - 1]])
+      aMat = fromLists [[FieldStar (cols !! j !! k) | j <- [0 .. dim - 1]] | k <- [0 .. dim - 1]]
       aStar = fromLists (map (map unFieldStar) (toLists (starMatrix aMat)))
       pullback do_ =
         let -- Cross-coupling @B · do_@ for this particular output cotangent.

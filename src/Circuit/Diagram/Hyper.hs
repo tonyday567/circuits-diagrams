@@ -32,6 +32,10 @@ import Circuit.Diagram (SDiagram (..))
 import Data.List (foldl', groupBy, sort, sortOn)
 import Prelude
 
+-- $setup
+-- >>> import Circuit.Diagram (SDiagram (..))
+-- >>> import Circuit.Mermaid (toMermaid)
+
 -- | A diagram as port connectivity: boundary arities, a sorted multiset
 -- of nodes, and the wires (equivalence classes of ports).
 data HyperGraph = HyperGraph
@@ -110,6 +114,21 @@ arity = \case
 -- Assumes composable diagrams ('SThenD' zips the inner ports and drops
 -- any excess): the drawing syntax is untyped, so ill-formed composites
 -- degrade to dangling ports rather than an error.
+--
+-- 'STurn' is involutive and reverses composition order:
+--
+-- >>> hyperEquiv (STurn (STurn (SBox "f" 1 1))) (SBox "f" 1 1)
+-- True
+-- >>> hyperEquiv (STurn (SThenD (SBox "f" 1 1) (SBox "g" 1 1))) (SThenD (STurn (SBox "g" 1 1)) (STurn (SBox "f" 1 1)))
+-- True
+--
+-- >>> putStr (toMermaid (STurn (SBox "f" 1 1)))
+-- flowchart LR
+--   in0(["in 0"])
+--   out0(["out 0"])
+--   n0["f†"]
+--   in0 --> n0
+--   n0 --> out0
 normalise :: SDiagram -> HyperGraph
 normalise d =
   HyperGraph
@@ -175,6 +194,13 @@ findRoot ps p = case lookup p ps of
   Nothing -> p
   Just q -> findRoot ps q
 
+-- | Toggle a dagger suffix. Used by 'STurn' so that turning a turned node
+-- recovers the original label.
+turnLabel :: String -> String
+turnLabel lbl = case reverse lbl of
+  ('\x2020' : rest) -> reverse rest
+  _ -> lbl ++ "\x2020"
+
 -- | Merge the classes of two ports (first root wins, for determinism).
 -- Ports already in the same class are left alone — recording the link
 -- would create a self-loop.
@@ -221,7 +247,16 @@ go d b0 = case d of
      in (b3, (fi, go'))
   SBend -> node "cup" 2 0 b0
   SBend' -> node "cap" 0 2 b0
-  STurn d' -> let (i, o) = arity d' in node "turn" o i b0
+  STurn d' ->
+    let oldCount = length (builtNodes b0)
+        (b1, (ins, outs)) = go d' b0
+        newCount = length (builtNodes b1) - oldCount
+        (newNodes, oldNodes) = splitAt newCount (builtNodes b1)
+        turnedNewNodes =
+          [ BuiltNode (turnLabel lbl) (reverse outs') (reverse ins')
+          | BuiltNode lbl ins' outs' <- newNodes
+          ]
+     in (b1 {builtNodes = turnedNewNodes ++ oldNodes}, (reverse outs, reverse ins))
   SUnitL -> node "unitL" 1 1 b0
   SUnitL' -> node "unitL'" 1 1 b0
   SUnitR -> node "unitR" 1 1 b0

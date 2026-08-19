@@ -118,7 +118,7 @@ layoutSDiagram = go 0
 
 boxCount :: SDiagram -> Int
 boxCount = \case
-  SBox _ _ _ -> 1
+  SBox {} -> 1
   SPrismBox -> 1
   SBeside a b -> boxCount a + boxCount b
   SThenD a b -> boxCount a + boxCount b

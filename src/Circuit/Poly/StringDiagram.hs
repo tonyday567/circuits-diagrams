@@ -72,6 +72,9 @@ import Circuit.Poly.Int qualified as Int
 import Circuit.Tensor qualified as M
 import Prelude hiding (id, (.))
 
+-- $setup
+-- >>> import Prelude
+
 -- | A wire is a forward type paired with a backward type.
 type Wire a da = IN a da
 
@@ -151,7 +154,7 @@ toIntMorph (Diagram d) = case d of
               Right s' -> (s', match s)
           )
       )
-  Beside_ f g -> besideInt (toIntMorph (Diagram f)) (toIntMorph (Diagram g))
+  Beside_ f g -> Int.par (toIntMorph (Diagram f)) (toIntMorph (Diagram g))
   ThenD_ f g -> Int.comp (toIntMorph (Diagram g)) (toIntMorph (Diagram f))
   Bend_ -> IntMorph (Lift (\((da, a), ()) -> ((a, da), ())))
   Bend'_ -> IntMorph (Lift (\((), (da, a)) -> ((), (a, da))))
@@ -241,6 +244,24 @@ bend' = Diagram Bend'_
 bend :: Diagram (da, a) (a, da) () ()
 bend = Diagram Bend_
 
+-- $snake-equations
+--
+-- The cap/cup pair on a self-dual finite object satisfies the snake
+-- equations up to diagram deformation. For @IN Bool Bool@ both snakes
+-- round-trip to the identity wire:
+--
+-- >>> :{
+-- let snakeR :: Diagram Bool Bool Bool Bool
+--     snakeR = unitR' `thenD` (wire `beside` bend') `thenD` assoc `thenD` (bend `beside` wire) `thenD` unitL
+--     snakeL :: Diagram Bool Bool Bool Bool
+--     snakeL = unitL' `thenD` (bend' `beside` wire) `thenD` assoc' `thenD` (wire `beside` bend) `thenD` unitR
+--     inputs = [(a, b) | a <- [False, True], b <- [False, True]]
+-- in ( and [runDiagram snakeR i == runDiagram wire i | i <- inputs]
+--    , and [runDiagram snakeL i == runDiagram wire i | i <- inputs]
+--    )
+-- :}
+-- (True,True)
+
 -- | Turn a diagram around: dual in the compact closed sense.
 turn :: Diagram a da b db -> Diagram db b da a
 turn (Diagram f) = Diagram (Turn_ f)
@@ -285,18 +306,6 @@ runDiagram :: Diagram a da b db -> (a, db) -> (da, b)
 runDiagram d = run (runIntMorph (toIntMorph d))
 
 -- Internal helpers (reused from the previous shallow-embedding definitions).
-
-besideInt ::
-  IntMorph (,) (Loop (,) (->)) ap am bp bm ->
-  IntMorph (,) (Loop (,) (->)) cp cm dp dm ->
-  IntMorph (,) (Loop (,) (->)) (ap, cp) (am, cm) (bp, dp) (bm, dm)
-besideInt (IntMorph f) (IntMorph g) = IntMorph (Lift permOut Cat.. (f `M.par` g) Cat.. Lift permIn)
-  where
-    permIn :: ((ap, cp), (bm, dm)) -> ((ap, bm), (cp, dm))
-    permIn ((ap, cp), (bm, dm)) = ((ap, bm), (cp, dm))
-
-    permOut :: ((am, bp), (cm, dp)) -> ((am, cm), (bp, dp))
-    permOut ((am, bp), (cm, dp)) = ((am, cm), (bp, dp))
 
 turnInt ::
   IntMorph (,) (Loop (,) (->)) a da b db ->

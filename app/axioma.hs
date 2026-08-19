@@ -5,7 +5,7 @@
 
 module Main (main) where
 
-import Circuit.Category ((.))
+import Circuit.Category (id, (.))
 import Circuit.ChannelPoly
   ( Coalgebra (..),
     Step,
@@ -36,6 +36,7 @@ import Circuit.Diagram.Hyper
     normalise,
   )
 import Circuit.Diff.Param (DiffP (..), splitP)
+import Chart qualified as Chart
 import Circuit.Poly hiding (runSystem)
 import Circuit.Poly qualified as Poly
 import Circuit.Poly.DiffP
@@ -77,6 +78,7 @@ import Circuit.Poly.StringDiagram
     prismBox,
     runDiagram,
     sCopy,
+    sCreate,
     sDelete,
     sMerge,
     skeleton,
@@ -94,6 +96,7 @@ import Control.Exception (ErrorCall, evaluate, try)
 import Data.List (scanl')
 import Data.Maybe (isJust, isNothing)
 import Data.Void (Void, absurd)
+import Strings.Svg.Layout
 import System.Exit (exitFailure)
 import Prelude hiding (id, (.))
 
@@ -113,6 +116,15 @@ assertError msg action = do
     Right _ -> do
       putStrLn ("  FAIL " ++ msg)
       exitFailure
+
+approx :: Double -> Double -> Bool
+approx a b = abs (a - b) < 0.08
+
+ptApprox :: Chart.Point Double -> Chart.Point Double -> Bool
+ptApprox (Chart.Point x1 y1) (Chart.Point x2 y2) = approx x1 x2 && approx y1 y2
+
+ptsApprox :: [Chart.Point Double] -> [Chart.Point Double] -> Bool
+ptsApprox ps qs = length ps == length qs && and (zipWith ptApprox ps qs)
 
 -- | Compare two monomial morphisms by applying them at a concrete position
 -- and checking both the output position and pullback at sample cotangents.
@@ -342,7 +354,7 @@ main = do
 
   do
     let tv =
-          ET ((), ()) (\(d1, d2) -> d1 ++ d2) ::
+          ET ((), ()) (uncurry (++)) ::
             Eval ('Tensor ('Exp String) ('Exp String)) String
     assert "netRoundTrip Tensor" $ case netRoundTrip tv of
       ET ((), ()) f -> f ("hello ", "world") == "hello world"
@@ -365,7 +377,7 @@ main = do
 
   do
     let ab =
-          ET ((), ()) (\(a, b) -> a ++ b) ::
+          ET ((), ()) (uncurry (++)) ::
             Eval ('Tensor ('Exp String) ('Exp String)) String
     assert "tensor braiding self-inverse" $ case runMorphism (Compose TensorBraid TensorBraid) ab of
       ET ((), ()) f -> f ("hello ", "world") == "hello world"
@@ -383,7 +395,7 @@ main = do
   putStrLn "Phase 1: composition product iso"
   do
     let nested =
-          EP (EK 5, EE (\dn -> EP (EK (show dn ++ "!"), EE (\c -> [c] ++ "?")))) ::
+          EP (EK 5, EE (\dn -> EP (EK (show dn ++ "!"), EE (\c -> c : "?")))) ::
             Eval (Mono Int Int) (Eval (Mono Char String) String)
     assert "nestedToComp . compToNested" $ case nestedToComp (compToNested (nestedToComp nested)) of
       EC ((n, ()), hang) k ->
@@ -531,7 +543,7 @@ main = do
     let compMono :: Eval ('Comp (Mono Int Int) (Mono Int Int)) Int
         compMono =
           EC
-            (((1, ()), \case Right n -> (n * 2, ()); Left v -> absurd v))
+            ((1, ()), \case Right n -> (n * 2, ()); Left v -> absurd v)
             (\case (Right n, Right m) -> n + m; _ -> 0)
         result = runMorphism (CompT transLens1 transLens2) compMono
     assert "CompT functoriality" $
@@ -712,7 +724,7 @@ main = do
       prismMatch p (build 7) == Left (7 :: Int)
     assert "prism match-build: either build identity (prismMatch p s) == s" $
       all
-        (\s -> either build (\x -> x) (prismMatch p s) == s)
+        (\s -> either build id (prismMatch p s) == s)
         [Left 7 :: Either Int String, Right "hello"]
 
   do
@@ -989,7 +1001,7 @@ main = do
           s ->
           [(Int, Int, Int)] ->
           [(Int, Int, Int, s)]
-        runNested _ s [] = []
+        runNested _ _ [] = []
         runNested sys s ((i1, i2, i3) : is) =
           case toEvalSystem sys s of
             EC ((o1, ()), hangOuter) k ->
@@ -1003,7 +1015,7 @@ main = do
           s ->
           [(Int, Int, Int)] ->
           [(Int, Int, Int, s)]
-        runLeftNested _ s [] = []
+        runLeftNested _ _ [] = []
         runLeftNested sys s ((i1, i2, i3) : is) =
           case toEvalSystem sys s of
             EC (((o1, ()), hangPQ), hangR) k ->
@@ -1189,46 +1201,6 @@ main = do
         nonContractiveClosed = monoPost . traceDiffPD 0.0 1e-12 50 (runSystemArr (diffPMono g4Step)) . monoPre
     assertError "T3 rejects |J| >= 1" (fst (runDiffP nonContractiveClosed 2.0 0.0))
 
-  do
-    -- G4d · vector-channel star trace matches finite difference.
-    --
-    -- Two coupled states with a scalar parameter on the (1,1) coupling:
-    --   s1' = p·s1 + 0.1·s2 + i
-    --   s2' = 0.2·s1 + 0.3·s2
-    --   o   = s1' + s2'
-    -- The feedback Jacobian is [[p,0.1],[0.2,0.3]]; for p = 0.5 it is
-    -- contractive, and the closed gradient is checked against finite differences.
-    let matrixStep :: DiffP Double ([Double], Double) ([Double], Double)
-        matrixStep = DiffP $ \p (s, i) ->
-          let [s1, s2] = s
-              s1' = p * s1 + 0.1 * s2 + i
-              s2' = 0.2 * s1 + 0.3 * s2
-              o = s1' + s2'
-              back (ds', do') =
-                let [ds1', ds2'] = ds'
-                    dtotal1 = ds1' + do'
-                    dtotal2 = ds2' + do'
-                    ds1 = p * dtotal1 + 0.2 * dtotal2
-                    ds2 = 0.1 * dtotal1 + 0.3 * dtotal2
-                    di = dtotal1
-                    dp = s1 * dtotal1
-                 in (([ds1, ds2], di), dp)
-           in (([s1', s2'], o), back)
-        matrixClosed :: DiffP Double Double Double
-        matrixClosed = traceDiffPMatrix [0.0, 0.0] 1e-12 200 matrixStep
-        p0 = 0.5 :: Double
-        i0 = 1.0 :: Double
-        eps = 1e-5
-        (_, closedBack) = runDiffP matrixClosed p0 i0
-        (_, dp) = closedBack 1.0
-        oPlus = fst (runDiffP matrixClosed (p0 + eps) i0)
-        oMinus = fst (runDiffP matrixClosed (p0 - eps) i0)
-        fd = (oPlus - oMinus) / (2 * eps)
-    -- DISABLED: see circuits-residual.md § Disabled oracles
-    -- assert "G4d vector-channel star trace matches finite difference" $
-    --   abs (dp - fd) < 1e-6
-    pure ()
-
   ----------------------------------------------------------------------
   -- Phase 7: span / cube spike
   ----------------------------------------------------------------------
@@ -1356,7 +1328,7 @@ main = do
               (EvalC (MonoC String Char) String)
           nested =
             EPC
-              (EKC 5, EEC (\dn -> EPC (EKC (show dn ++ "!"), EEC (\c -> [c] ++ "?"))))
+              (EKC 5, EEC (\dn -> EPC (EKC (show dn ++ "!"), EEC (\c -> c : "?"))))
           roundTrip = nestedToCompC (compToNestedC (nestedToCompC nested))
       assert "C6 nestedToCompC . compToNestedC" $ case roundTrip of
         ECC ((n, ()), hang) k ->
@@ -1406,7 +1378,7 @@ main = do
     ----------------------------------------------------------------------
     do
       let v :: EvalC ('CProd ('CSum 'CY ('CConst Int)) ('CExp Char)) String
-          v = EPC (ESC (Left (EYC "left")), EEC (\c -> [c]))
+          v = EPC (ESC (Left (EYC "left")), EEC (: []))
           roundTrip = prodSumDistrRC (prodSumDistrLC v)
       assert "C7 prodSumDistrRC . prodSumDistrLC" $ case roundTrip of
         EPC (ESC (Left (EYC s)), EEC f) -> s == "left" && f 'x' == "x"
@@ -1414,7 +1386,7 @@ main = do
 
     do
       let v :: EvalC ('CSum ('CProd 'CY ('CExp Char)) ('CProd ('CConst Int) ('CExp Char))) String
-          v = ESC (Right (EPC (EKC 7, EEC (\c -> [c] ++ "!"))))
+          v = ESC (Right (EPC (EKC 7, EEC (\c -> c : "!"))))
           roundTrip = prodSumDistrLC (prodSumDistrRC v)
       assert "C7 prodSumDistrLC . prodSumDistrRC" $ case roundTrip of
         ESC (Right (EPC (EKC n, EEC f))) -> n == 7 && f 'z' == "z!"
@@ -1456,7 +1428,7 @@ main = do
       let nested :: EvalC (MonoC Int Int) (EvalC (MonoC String Char) String)
           nested =
             EPC
-              (EKC 5, EEC (\dn -> EPC (EKC (show dn ++ "!"), EEC (\c -> [c] ++ "?"))))
+              (EKC 5, EEC (\dn -> EPC (EKC (show dn ++ "!"), EEC (\c -> c : "?"))))
           ECC (_, hang) _ = nestedToCompC nested
       assertError "C9 off-fibre hang is error" (hang (Right (6, 7)))
 
@@ -1737,12 +1709,90 @@ main = do
           Prism match build ::
             Morphism (Mono (Either Int String) (Either Int String)) ('Sum (Mono Int Int) (Mono (Either Int String) (Either Int String)))
         v =
-          EP (EK (Left 5), EE (either (\n -> n) length)) ::
+          EP (EK (Left 5), EE (either id length)) ::
             Eval (Mono (Either Int String) (Either Int String)) Int
     assert "Prism naturality" $
       case (fmap show (runMorphism m v), runMorphism m (fmap show v)) of
         (ES (Left (EP (EK a, EE f))), ES (Left (EP (EK b, EE g)))) ->
           a == b && f 7 == g 7
         _ -> False
+
+  ----------------------------------------------------------------------
+  -- Phase 7: string-diagram structural oracles
+  ----------------------------------------------------------------------
+  putStrLn "Phase 7: string-diagram structural oracles"
+  do
+    let w = layoutSDiagram (skeleton wire)
+    assert "skeleton wire is one line" $ countLines w == 1 && countRects w == 0
+
+    let b = layoutSDiagram (skeleton (boxLabelled "f" (lens id (\_ da -> da))))
+    assert "skeleton box is one rect + two line segments" $
+      countRects b == 1 && countLines b == 2
+
+    let d1 = layoutSDiagram SWire
+        d2 = layoutSDiagram SWire
+        ten = layoutSDiagram (SBeside SWire SWire)
+        seq' = layoutSDiagram (SThenD SWire SWire)
+    assert "beside height ≈ h1 + gap + h2" $
+      approx (layoutHeight ten) (layoutHeight d1 + tensorGap + layoutHeight d2)
+    assert "thenD width ≈ w1 + gap + w2" $
+      approx (layoutWidth seq') (layoutWidth d1 + composeGap + layoutWidth d2)
+
+    let cup = layoutSDiagram SBend
+        cap = layoutSDiagram SBend'
+    assert "bend (cup) is one path" $ countPaths cup == 1
+    assert "bend' (cap) is one path" $ countPaths cap == 1
+
+    let sw = layoutSDiagram SSwap
+    assert "swap has crossing line segments (≥2)" $ countLines sw >= 2
+
+    let typedBeside = layoutSDiagram (skeleton (beside wire wire))
+        typedThen = layoutSDiagram (skeleton (thenD wire wire))
+    assert "typed beside skeleton layouts" $ layoutHeight typedBeside > layoutHeight d1
+    assert "typed thenD skeleton layouts" $ layoutWidth typedThen > layoutWidth d1
+
+    let box2 = layoutSDiagram (SBox "f" 2 2)
+        chain2 = layoutSDiagram (SThenD (SBox "f" 2 2) (SBox "g" 2 2))
+    assert "two-port box has two ports each side" $
+      length (leftPorts box2) == 2 && length (rightPorts box2) == 2
+    assert "two-port box grows taller than one-port box" $
+      layoutHeight box2 > layoutHeight b
+    assert "two-port box chain aligns both port pairs (pinned)" $
+      ptsApprox (leftPorts chain2) [Chart.Point 0 0.25, Chart.Point 0 (-0.25)]
+        && ptsApprox (rightPorts chain2) [Chart.Point 2.12 0.25, Chart.Point 2.12 (-0.25)]
+
+    let mismatch = layoutSDiagram (SThenD SWire (SBeside SWire SWire))
+    assert "port-count mismatch truncates with a dangling marker" $
+      countGlyphs mismatch == 1 && length (rightPorts mismatch) == 2
+
+    let tall = layoutSDiagram (SBeside (SBox "f" 2 2) SWire)
+        ys = [y | Chart.Point _ y <- leftPorts tall]
+    assert "beside mismatched heights keeps ports strictly ordered" $
+      and (zipWith (>) ys (drop 1 ys))
+    case (ys, leftPorts box2) of
+      (yTop : _, Chart.Point _ boxTop0 : _) ->
+        let boxBot = yTop - boxTop0 - layoutHeight box2 / 2
+         in assert "stretched wire clears the box body" $
+              and [y + 0.05 < boxBot | y <- drop (length (leftPorts box2)) ys]
+      _ -> assert "stretched wire clears the box body" False
+
+    let cp = layoutSDiagram sCopy
+        mg = layoutSDiagram sMerge
+        roundTrip = layoutSDiagram (SThenD sCopy sMerge)
+    assert "copy spider fans out to two outputs (pinned)" $
+      ptsApprox (rightPorts cp) [Chart.Point 1 0.25, Chart.Point 1 (-0.25)]
+    assert "copy outputs meet merge inputs exactly" $
+      ptsApprox ((\(Chart.Point _ y) -> Chart.Point 0 y) <$> rightPorts cp) (leftPorts mg)
+    assert "copy-merge round trip shows both dots" $ countGlyphs roundTrip == 2
+    assert "round-trip spider legs are curved paths" $ countPaths roundTrip == 6
+    assert "round trip ends on a single centred wire (pinned)" $
+      ptsApprox (rightPorts roundTrip) [Chart.Point 2.12 0]
+
+    let del = layoutSDiagram sDelete
+        cre = layoutSDiagram sCreate
+    assert "delete terminates its input with a dot" $
+      rightPorts del == [] && countGlyphs del == 1 && countPaths del == 1
+    assert "create opens a dot into an output" $
+      leftPorts cre == [] && countGlyphs cre == 1 && countPaths cre == 1
 
   putStrLn "All tests passed"

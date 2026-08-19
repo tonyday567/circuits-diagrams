@@ -15,9 +15,10 @@
 --   mermaid edge per producer–consumer pair.
 -- * Edges carry port labels only when a node endpoint has arity greater
 --   than one.
--- * 'STurn' is opaque (the hypergraph stores it as a @turn@ node), and
---   node identity is by label, as in the hypergraph normal form: two
---   boxes with the same label collapse to one mermaid node.
+-- * 'STurn' swaps node input/output arities, toggles a @†@ suffix on
+--   labels, and reverses boundary order; node identity is by label, as in
+--   the hypergraph normal form: two boxes with the same label collapse to
+--   one mermaid node.
 module Circuit.Mermaid
   ( toMermaid,
   )

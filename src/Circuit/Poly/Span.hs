@@ -311,7 +311,7 @@ compAssocLC (ECC ((i, f), g) k) =
     ( i,
       \dp ->
         let j = f dp
-            h = \dq -> g (dp, dq)
+            h dq = g (dp, dq)
          in (j, h)
     )
     (\(dp, (dq, dr)) -> k ((dp, dq), dr))
@@ -321,8 +321,8 @@ compAssocRC ::
   EvalC ('CComp p ('CComp q r)) x ->
   EvalC ('CComp ('CComp p q) r) x
 compAssocRC (ECC (i, h) k) =
-  let f = \dp -> fst (h dp)
-      g = \(dp, dq) -> snd (h dp) dq
+  let f dp = fst (h dp)
+      g (dp, dq) = snd (h dp) dq
    in ECC ((i, f), g) (\((dp, dq), dr) -> k (dp, (dq, dr)))
 
 -- ** Sum / product distributivity
