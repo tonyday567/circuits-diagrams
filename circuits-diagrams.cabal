@@ -86,10 +86,10 @@ library
     Strings.Svg.Render
 
   build-depends:
-    base >=4.18 && <5,
+    base >=4.20 && <5,
     bytestring >=0.11 && <0.13,
     chart-svg >=0.8 && <0.9,
-    circuits >=0.3 && <0.5,
+    circuits >=0.3 && <0.4,
     circuits-diff >=0.1 && <0.2,
     circuits-mat >=0.1 && <0.2,
     directory >=1.3 && <1.4,
@@ -104,9 +104,9 @@ executable circuits-diagrams-axioma
   hs-source-dirs: app
   main-is: axioma.hs
   build-depends:
-    base >=4.18 && <5,
+    base >=4.20 && <5,
     chart-svg >=0.8 && <0.9,
-    circuits >=0.3 && <0.5,
+    circuits >=0.3 && <0.4,
     circuits-diagrams,
     circuits-diff,
 
@@ -119,8 +119,6 @@ executable render-examples
   main-is: render-examples.hs
   hs-source-dirs: app
   build-depends:
-    base >=4.18 && <5,
+    base >=4.20 && <5,
     circuits-diagrams,
-    optparse-applicative >=0.18 && <0.20,
-
-
+    optparse-applicative >=0.17 && <0.20,
