@@ -5,6 +5,7 @@
 
 module Main (main) where
 
+import Chart qualified
 import Circuit.Category (id, (.))
 import Circuit.ChannelPoly
   ( Coalgebra (..),
@@ -36,7 +37,6 @@ import Circuit.Diagram.Hyper
     normalise,
   )
 import Circuit.Diff.Param (DiffP (..), splitP)
-import Chart qualified as Chart
 import Circuit.Poly hiding (runSystem)
 import Circuit.Poly qualified as Poly
 import Circuit.Poly.DiffP

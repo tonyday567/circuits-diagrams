@@ -1,8 +1,8 @@
 -- | Write the seven equality SVGs into a directory.
 module Main (main) where
 
-import Strings.Svg.Examples (writeAllExamples)
 import Options.Applicative
+import Strings.Svg.Examples (writeAllExamples)
 import Prelude
 
 data Config = Config
