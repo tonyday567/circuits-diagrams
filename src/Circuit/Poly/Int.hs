@@ -64,7 +64,6 @@ import Prelude hiding (id, (.))
 -- >>> import Circuit.Syntax (Syntax (..), (:+:) (..), eval)
 -- >>> import Circuit.Channel (Traced (..), Channel (..), trace)
 -- >>> import Circuit.Tensor (Action (..), Tensor (..))
--- >>> import Circuit.Hyper (observe)
 -- >>> import Circuit.Poly (dagger, lens, applyLens, Morphism (..), Mono)
 -- >>> import Data.Bifunctor (Bifunctor (..))
 -- >>> :{
