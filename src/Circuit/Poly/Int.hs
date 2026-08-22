@@ -29,10 +29,6 @@ module Circuit.Poly.Int
     -- * Tensor product of Int morphisms
     par,
 
-    -- * Hyper bridge
-    toHyper,
-    fromHyper,
-
     -- * Unit and coherence (yanking witnesses)
     cap,
     cup,
@@ -53,7 +49,6 @@ where
 import Circuit.Category ((.))
 import Circuit.Category qualified as Cat (Category (..))
 import Circuit.Channel (Channel (..), Traced (..))
-import Circuit.Hyper (Hyper, lift, observe)
 import Circuit.Syntax (Syntax (..), (:+:) (..), eval)
 import Circuit.Trace (Trace, SigYank (..), base, yank)
 import Circuit.Poly (Mono, Morphism (Compose), applyLens, lens)
@@ -214,26 +209,6 @@ id = IntMorph M.swap
 -- (6,2)
 dual :: (M.Action t arr) => IntMorph t arr ap am bp bm -> IntMorph t arr bm bp am ap
 dual (IntMorph f) = IntMorph (M.swap . f . M.swap)
-
--- | Bridge from an Int morphism over functions to a hyperfunction on the
--- paired wires.  This is not a structural isomorphism — it is the
--- operational correspondence that lets 'Hyper' absorb the Int construction
--- over @(->)@.
---
--- >>> let f = IntMorph (\(a, d) -> (a * 2, d + 1)) :: IntMorph (,) (->) Int Int Int Int
--- >>> observe (toHyper f) (5, 1)
--- (10,2)
-toHyper :: IntMorph (,) (->) ap am bp bm -> Hyper (ap, bm) (am, bp)
-toHyper = lift . runIntMorph
-
--- | Forget a hyperfunction back to an Int morphism.  This collapses feedback
--- structure; only observable behaviour round-trips.
---
--- >>> let f = IntMorph (\(a, d) -> (a * 2, d + 1)) :: IntMorph (,) (->) Int Int Int Int
--- >>> runIntMorph (fromHyper (toHyper f)) (5, 1)
--- (10,2)
-fromHyper :: Hyper (ap, bm) (am, bp) -> IntMorph (,) (->) ap am bp bm
-fromHyper h = IntMorph (observe h)
 
 -- | Composition in the Int construction.
 --
