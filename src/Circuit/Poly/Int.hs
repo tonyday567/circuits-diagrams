@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | The Int construction: free compact closure over a traced monoidal
@@ -27,7 +28,7 @@ module Circuit.Poly.Int
     dual,
 
     -- * Tensor product of Int morphisms
-    par,
+    intTensor,
 
     -- * Unit and coherence (yanking witnesses)
     cap,
@@ -39,7 +40,7 @@ module Circuit.Poly.Int
     tensorAssoc,
     tensorAssoc',
     assocInv,
-    braid,
+    intBraid,
 
     -- * Bridge from Poly monomial lenses
     causal,
@@ -49,10 +50,10 @@ where
 import Circuit.Category ((.))
 import Circuit.Category qualified as Cat (Category (..))
 import Circuit.Channel (Channel (..), Traced (..))
-import Circuit.Syntax (Syntax (..), (:+:) (..), eval)
-import Circuit.Trace (Trace, SigYank (..), base, yank)
 import Circuit.Poly (Mono, Morphism (Compose), applyLens, lens)
+import Circuit.Syntax (Syntax (..), eval, (:+:) (..))
 import Circuit.Tensor qualified as M (Action (..), Tensor (..))
+import Circuit.Trace (SigYank (..), Trace, base, yank)
 import Data.Kind (Type)
 import Prelude hiding (id, (.))
 
@@ -66,12 +67,8 @@ import Prelude hiding (id, (.))
 -- >>> import Circuit.Tensor (Action (..), Tensor (..))
 -- >>> import Circuit.Poly (dagger, lens, applyLens, Morphism (..), Mono)
 -- >>> import Data.Bifunctor (Bifunctor (..))
--- >>> :{
--- isYank :: Trace (,) (->) a b -> Bool
--- isYank (Op (R (Yank _))) = True
--- isYank _ = False
--- :}
 -- >>> :set -XGADTs -XStandaloneDeriving -XFlexibleInstances -XFlexibleContexts -XScopedTypeVariables -XTypeApplications
+-- >>> isYank :: Trace (,) (->) a b -> Bool; isYank x = case x of { Op (R (Yank _)) -> True; _ -> False }
 -- >>> class Eq a => Finite a where universe :: [a]
 -- >>> instance Finite () where universe = [()]
 -- >>> instance Finite Bool where universe = [False, True]
@@ -196,7 +193,7 @@ newtype IntMorph (t :: Type -> Type -> Type) arr (ap :: Type) (am :: Type) (bp :
 -- >>> runIntMorph i (1, False)
 -- (False,1)
 id :: (M.Action t arr) => IntMorph t arr ap am ap am
-id = IntMorph M.swap
+id = IntMorph M.braid
 
 -- | Dual of an Int morphism: swap the polarities of domain and codomain.
 --
@@ -207,7 +204,7 @@ id = IntMorph M.swap
 -- >>> runIntMorph (dual f) (5, 1)
 -- (6,2)
 dual :: (M.Action t arr) => IntMorph t arr ap am bp bm -> IntMorph t arr bm bp am ap
-dual (IntMorph f) = IntMorph (M.swap . f . M.swap)
+dual (IntMorph f) = IntMorph (M.braid . f . M.braid)
 
 -- | Composition in the Int construction.
 --
@@ -236,7 +233,7 @@ comp ::
   IntMorph t arr bp bm cp cm ->
   IntMorph t arr ap am bp bm ->
   IntMorph t arr ap am cp cm
-comp (IntMorph g) (IntMorph f) = IntMorph (trace (middleOut . (g `M.par` f) . middleIn))
+comp (IntMorph g) (IntMorph f) = IntMorph (trace (middleOut . (g `M.tensor` f) . middleIn))
   where
     id_ap = Cat.id
     id_am = Cat.id
@@ -244,35 +241,35 @@ comp (IntMorph g) (IntMorph f) = IntMorph (trace (middleOut . (g `M.par` f) . mi
 
     middleIn = step6 . step5 . step4 . step3 . step2 . step1
       where
-        step1 = M.swap @t @arr @(t bm bp) @(t ap cm)
+        step1 = M.braid @t @arr @(t bm bp) @(t ap cm)
         step2 = assoc @t @arr @ap @cm @(t bm bp)
-        step3 = id_ap `M.par` M.swap @t @arr @cm @(t bm bp)
-        step4 = id_ap `M.par` assoc @t @arr @bm @bp @cm
+        step3 = id_ap `M.tensor` M.braid @t @arr @cm @(t bm bp)
+        step4 = id_ap `M.tensor` assoc @t @arr @bm @bp @cm
         step5 = assoc' @t @arr @ap @bm @(t bp cm)
-        step6 = M.swap @t @arr @(t ap bm) @(t bp cm)
+        step6 = M.braid @t @arr @(t ap bm) @(t bp cm)
 
     middleOut = step7 . step6 . step5 . step4 . step3 . step2 . step1
       where
         step1 = assoc @t @arr @bm @cp @(t am bp)
-        step2 = id_bm `M.par` M.swap @t @arr @cp @(t am bp)
-        step3 = id_bm `M.par` assoc @t @arr @am @bp @cp
-        step4 = id_bm `M.par` (id_am `M.par` M.swap @t @arr @bp @cp)
-        step5 = id_bm `M.par` assoc' @t @arr @am @cp @bp
+        step2 = id_bm `M.tensor` M.braid @t @arr @cp @(t am bp)
+        step3 = id_bm `M.tensor` assoc @t @arr @am @bp @cp
+        step4 = id_bm `M.tensor` (id_am `M.tensor` M.braid @t @arr @bp @cp)
+        step5 = id_bm `M.tensor` assoc' @t @arr @am @cp @bp
         step6 = slide @t @arr @bm @(t am cp) @bp
-        step7 = M.swap @t @arr @(t am cp) @(t bm bp)
+        step7 = M.braid @t @arr @(t am cp) @(t bm bp)
 
 -- | Tensor product of two Int morphisms.
 --
 -- On objects this is componentwise: @(ap, am) \u2297 (cp, cm) = (t ap cp, t am cm)@.
 -- On morphisms it threads the two base arrows side-by-side and reassociates
 -- the factors into the required @arr (t (t ap cp) (t bm dm)) (t (t am cm) (t bp dp))@ shape.
-par ::
+intTensor ::
   forall t arr ap am bp bm cp cm dp dm.
   (M.Action t arr, Channel t arr) =>
   IntMorph t arr ap am bp bm ->
   IntMorph t arr cp cm dp dm ->
   IntMorph t arr (t ap cp) (t am cm) (t bp dp) (t bm dm)
-par (IntMorph f) (IntMorph g) = IntMorph (permOut . (f `M.par` g) . permIn)
+intTensor (IntMorph f) (IntMorph g) = IntMorph (permOut . (f `M.tensor` g) . permIn)
   where
     id_ap = Cat.id
     id_bm = Cat.id
@@ -280,17 +277,17 @@ par (IntMorph f) (IntMorph g) = IntMorph (permOut . (f `M.par` g) . permIn)
     permIn = step5 . step4 . step3 . step2 . step1
       where
         step1 = assoc @t @arr @ap @cp @(t bm dm)
-        step2 = id_ap `M.par` M.swap @t @arr @cp @(t bm dm)
-        step3 = id_ap `M.par` assoc @t @arr @bm @dm @cp
-        step4 = id_ap `M.par` (id_bm `M.par` M.swap @t @arr @dm @cp)
+        step2 = id_ap `M.tensor` M.braid @t @arr @cp @(t bm dm)
+        step3 = id_ap `M.tensor` assoc @t @arr @bm @dm @cp
+        step4 = id_ap `M.tensor` (id_bm `M.tensor` M.braid @t @arr @dm @cp)
         step5 = assoc' @t @arr @ap @bm @(t cp dm)
 
     permOut = step5 . step4 . step3 . step2 . step1
       where
         step1 = assoc @t @arr @am @bp @(t cm dp)
-        step2 = id_am `M.par` M.swap @t @arr @bp @(t cm dp)
-        step3 = id_am `M.par` assoc @t @arr @cm @dp @bp
-        step4 = id_am `M.par` (id_cm `M.par` M.swap @t @arr @dp @bp)
+        step2 = id_am `M.tensor` M.braid @t @arr @bp @(t cm dp)
+        step3 = id_am `M.tensor` assoc @t @arr @cm @dp @bp
+        step4 = id_am `M.tensor` (id_cm `M.tensor` M.braid @t @arr @dp @bp)
         step5 = assoc' @t @arr @am @cm @(t bp dp)
 
     id_am = Cat.id
@@ -356,7 +353,7 @@ tensorAssoc' ::
 tensorAssoc' = IntMorph $ \ ~(((x, y), z), (dx, (dy, dz))) -> (((dx, dy), dz), (x, (y, z)))
 
 -- | Symmetric braiding for @Int(->)@: @A \u2297 B -> B \u2297 A@.
-braid ::
+intBraid ::
   IntMorph
     (,)
     (->)
@@ -364,7 +361,7 @@ braid ::
     (da, db)
     (b, a)
     (db, da)
-braid = IntMorph $ \ ~((x, y), (dy, dx)) -> ((dx, dy), (y, x))
+intBraid = IntMorph $ \ ~((x, y), (dy, dx)) -> ((dx, dy), (y, x))
 
 -- | Yanking witness.  In the Int construction the identity is the swap on
 -- the two factors; tracing that swap over the Either tensor returns the

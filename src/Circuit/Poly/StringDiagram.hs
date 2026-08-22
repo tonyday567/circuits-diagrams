@@ -64,12 +64,12 @@ where
 import Circuit.Category qualified as Cat
 import Circuit.Channel (Traced (..))
 import Circuit.Diagram (SDiagram (..), sCopy, sCreate, sDelete, sMerge)
-import Circuit.Syntax (eval)
-import Circuit.Trace (Trace, base)
 import Circuit.Poly (Mono, Morphism, applyLens)
 import Circuit.Poly.Int (IN, IntMorph (..))
 import Circuit.Poly.Int qualified as Int
+import Circuit.Syntax (eval)
 import Circuit.Tensor qualified as M
+import Circuit.Trace (Trace, base)
 import Prelude hiding (id, (.))
 
 -- $setup
@@ -144,7 +144,7 @@ skeleton (Diagram d) = go d
 -- | Convert a deep-embedding diagram back to the executable Int corridor.
 toIntMorph :: Diagram a da b db -> IntMorph (,) (Trace (,) (->)) a da b db
 toIntMorph (Diagram d) = case d of
-  Wire_ -> IntMorph (base M.swap)
+  Wire_ -> IntMorph (base M.braid)
   Box_ _ m -> IntMorph (base (\(a, db) -> let (b, put) = applyLens m a in (put db, b)))
   PrismBox_ match build ->
     IntMorph
@@ -154,7 +154,7 @@ toIntMorph (Diagram d) = case d of
               Right s' -> (s', match s)
           )
       )
-  Beside_ f g -> Int.par (toIntMorph (Diagram f)) (toIntMorph (Diagram g))
+  Beside_ f g -> Int.intTensor (toIntMorph (Diagram f)) (toIntMorph (Diagram g))
   ThenD_ f g -> Int.comp (toIntMorph (Diagram g)) (toIntMorph (Diagram f))
   Bend_ -> IntMorph (base (\((da, a), ()) -> ((a, da), ())))
   Bend'_ -> IntMorph (base (\((), (da, a)) -> ((), (a, da))))
@@ -165,7 +165,7 @@ toIntMorph (Diagram d) = case d of
   UnitR'_ -> IntMorph (base (runIntMorph Int.unitR'))
   Assoc_ -> IntMorph (base (runIntMorph Int.tensorAssoc))
   Assoc'_ -> IntMorph (base (runIntMorph Int.tensorAssoc'))
-  Swap_ -> IntMorph (base (runIntMorph Int.braid))
+  Swap_ -> IntMorph (base (runIntMorph Int.intBraid))
   Trace_ f -> traceIntMorph (toIntMorph (Diagram f))
   where
     traceIntMorph ::
@@ -310,4 +310,4 @@ runDiagram d = eval (runIntMorph (toIntMorph d))
 turnInt ::
   IntMorph (,) (Trace (,) (->)) a da b db ->
   IntMorph (,) (Trace (,) (->)) db b da a
-turnInt (IntMorph f) = IntMorph (base M.swap Cat.. f Cat.. base M.swap)
+turnInt (IntMorph f) = IntMorph (base M.braid Cat.. f Cat.. base M.braid)
