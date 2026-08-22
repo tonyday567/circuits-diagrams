@@ -7,7 +7,7 @@ module Main (main) where
 
 import Chart qualified
 import Circuit.Category (id, (.))
-import Circuit.ChannelPoly
+import Circuit.System
   ( Coalgebra (..),
     Step,
     SumStep (..),
@@ -19,7 +19,7 @@ import Circuit.ChannelPoly
     duplicateSystem,
     iterateSystem,
     lensAsSystem,
-    runSystem,
+    runSystemMono,
     runSystemSum,
     runSystemSumHet,
     systemAsLens,
@@ -868,7 +868,7 @@ main = do
         -- Right-grouped three inputs: duplicate the left factor.
         feed3R sys s ((o1, o2), o3) =
           let s2 = feed2 sys s (o1, o2)
-           in snd (runSystem sys s2) o3
+           in snd (runSystemMono sys s2) o3
 
     assert "duplicateSystem coassociativity" $
       feed3L sumSystem 0 (1, (2, 3)) == 6
@@ -897,8 +897,8 @@ main = do
         sys' = lensAsSystem (systemAsLens sys)
         -- Round-trip preserves the (output, transition) view at every state.
         roundTripOk s =
-          let (o, f) = runSystem sys s
-              (o', f') = runSystem sys' s
+          let (o, f) = runSystemMono sys s
+              (o', f') = runSystemMono sys' s
            in o == o' && all (\i -> f i == f' i) [-5 .. 5]
     assert "S1: lensAsSystem . systemAsLens round-trips" $
       all roundTripOk [0 .. 5]

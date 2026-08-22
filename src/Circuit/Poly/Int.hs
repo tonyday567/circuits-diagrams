@@ -11,10 +11,10 @@
 --
 -- Identity is the symmetry on the two factors. Composition tensors the two
 -- base morphisms, reassociates so the middle pair can be eliminated, and
--- closes it with the base category's 'trace'. Over @Loop t arr@ this means
--- every composite inherits the one-'Knot' normal form.
+-- closes it with the base category's 'trace'. Over @Trace t arr@ this means
+-- every composite inherits the one-'Yank' normal form.
 --
--- This module uses only the 'Loop'/'Channel' surface and introduces no
+-- This module uses only the 'Trace'/'Channel' surface and introduces no
 -- new dependencies.
 module Circuit.Poly.Int
   ( -- * Int objects and morphisms
@@ -54,7 +54,8 @@ import Circuit.Category ((.))
 import Circuit.Category qualified as Cat (Category (..))
 import Circuit.Channel (Channel (..), Traced (..))
 import Circuit.Hyper (Hyper, lift, observe)
-import Circuit.Loop (Loop (..))
+import Circuit.Syntax (Syntax (..), (:+:) (..), eval)
+import Circuit.Trace (Trace, SigYank (..), base, yank)
 import Circuit.Poly (Mono, Morphism (Compose), applyLens, lens)
 import Circuit.Tensor qualified as M (Action (..), Tensor (..))
 import Data.Kind (Type)
@@ -64,13 +65,18 @@ import Prelude hiding (id, (.))
 -- >>> import Prelude hiding (id, (.))
 -- >>> import Circuit.Category ((.))
 -- >>> import Circuit.Category qualified as Cat
--- >>> import Circuit.Loop (Loop (..))
+-- >>> import Circuit.Trace (Trace, SigYank (..), base, yank)
+-- >>> import Circuit.Syntax (Syntax (..), (:+:) (..), eval)
 -- >>> import Circuit.Channel (Traced (..), Channel (..), trace)
 -- >>> import Circuit.Tensor (Action (..), Tensor (..))
 -- >>> import Circuit.Hyper (observe)
--- >>> import Circuit.Layer (run)
 -- >>> import Circuit.Poly (dagger, lens, applyLens, Morphism (..), Mono)
 -- >>> import Data.Bifunctor (Bifunctor (..))
+-- >>> :{
+-- isYank :: Trace (,) (->) a b -> Bool
+-- isYank (Op (R (Yank _))) = True
+-- isYank _ = False
+-- :}
 -- >>> :set -XGADTs -XStandaloneDeriving -XFlexibleInstances -XFlexibleContexts -XScopedTypeVariables -XTypeApplications
 -- >>> class Eq a => Finite a where universe :: [a]
 -- >>> instance Finite () where universe = [()]
@@ -235,21 +241,21 @@ fromHyper h = IntMorph (observe h)
 -- pair @(bm, bp)@ sits on the feedback wire, and close it with 'trace'. The
 -- result is again a single base arrow @arr (t ap cm) (t am cp)@.
 --
--- Nontrivial composition over @Loop (,) (->)@.  Both morphisms transform
+-- Nontrivial composition over @Trace (,) (->)@.  Both morphisms transform
 -- both legs; the middle trace closes the feedback loop.  The chosen bodies
 -- are lazy in the feedback component so the lazy @(,)@ knot stays productive.
 -- Hand-computed: input @(4, 1)@ gives output @(5, 2)@.
 --
--- >>> let f = IntMorph (Lift (\(a, _) -> (a + 1, a))) :: IntMorph (,) (Loop (,) (->)) Int Int Int Int
--- >>> let g = IntMorph (Lift (\(_, c) -> (c, c + 1))) :: IntMorph (,) (Loop (,) (->)) Int Int Int Int
--- >>> run (runIntMorph (g `comp` f)) (4, 1)
+-- >>> let f = IntMorph (base (\(a, _) -> (a + 1, a))) :: IntMorph (,) (Trace (,) (->)) Int Int Int Int
+-- >>> let g = IntMorph (base (\(_, c) -> (c, c + 1))) :: IntMorph (,) (Trace (,) (->)) Int Int Int Int
+-- >>> eval (runIntMorph (g `comp` f)) (4, 1)
 -- (5,2)
 --
--- The composite over @Loop@ inherits the one-'Knot' normal form: the inner
--- plumbing is absorbed into a single 'Knot' over one base arrow.
+-- The composite over @Trace@ inherits the one-'Yank' normal form: the inner
+-- plumbing is absorbed into a single 'yank' over one base arrow.
 --
--- >>> case runIntMorph (g `comp` f) of Knot _ -> "one-Knot"; Lift _ -> "not one-Knot"
--- "one-Knot"
+-- >>> if isYank (runIntMorph (g `comp` f)) then "one-Yank" else "not one-Yank"
+-- "one-Yank"
 comp ::
   forall t arr ap am bp bm cp cm.
   (M.Action t arr, Traced t arr) =>
@@ -449,21 +455,21 @@ braid = IntMorph $ \ ~((x, y), (dy, dx)) -> ((dx, dy), (y, x))
 -- >>> runIntMorph (causal l2) (40, 2)
 -- (42,"40")
 --
--- __Trivial knot under composition.__ Take 'causal' into the 'Loop' base and
--- compose two images with 'comp'. Composition ties a 'Knot' (the middle 'trace'
+-- __Trivial knot under composition.__ Take 'causal' into the 'Trace' base and
+-- compose two images with 'comp'. Composition ties a 'Yank' (the middle 'trace'
 -- fires) — yet the observed value equals plain lens 'Compose' under the polarity
 -- swap, because the causal fragment feeds nothing back through the loop. The knot
 -- is tied and does nothing: pullback magnitude of the trace is zero here.
 --
--- >>> let cz (m :: Morphism (Mono xd x) (Mono yd y)) = IntMorph (Lift (\(a, db) -> let (b, put) = applyLens m a in (put db, b))) :: IntMorph (,) (Loop (,) (->)) x xd y yd
+-- >>> let cz (m :: Morphism (Mono xd x) (Mono yd y)) = IntMorph (base (\(a, db) -> let (b, put) = applyLens m a in (put db, b))) :: IntMorph (,) (Trace (,) (->)) x xd y yd
 -- >>> let f = dagger (+1) (*2) :: Morphism (Mono Int Int) (Mono Int Int)
 -- >>> let g = dagger (*10) (+5) :: Morphism (Mono Int Int) (Mono Int Int)
 -- >>> let (b, put) = applyLens (Compose g f) 7 in (b, put 100)
 -- (80,210)
--- >>> run (runIntMorph (comp (cz g) (cz f) :: IntMorph (,) (Loop (,) (->)) Int Int Int Int)) (7, 100)
+-- >>> eval (runIntMorph (comp (cz g) (cz f) :: IntMorph (,) (Trace (,) (->)) Int Int Int Int)) (7, 100)
 -- (210,80)
--- >>> case runIntMorph (comp (cz g) (cz f) :: IntMorph (,) (Loop (,) (->)) Int Int Int Int) of Knot _ -> "Knot (tied, trivial)"; Lift _ -> "Lift (no knot)"
--- "Knot (tied, trivial)"
+-- >>> if isYank (runIntMorph (comp (cz g) (cz f) :: IntMorph (,) (Trace (,) (->)) Int Int Int Int)) then "Yank (tied, trivial)" else "Lift (no knot)"
+-- "Yank (tied, trivial)"
 causal :: Morphism (Mono da a) (Mono db b) -> IntMorph (,) (->) a da b db
 causal m = IntMorph (\(a, db) -> let (b, put) = applyLens m a in (put db, b))
 

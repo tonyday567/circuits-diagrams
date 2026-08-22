@@ -12,8 +12,8 @@
 -- is composition, and bending a wire back uses the compact-closed cap/cup.
 --
 -- This module aliases the underlying Int machinery with string-diagram
--- names and runs the diagrams over 'Loop (,) (->)' so that feedback loops
--- are tied into one-'Knot' normal form.
+-- names and runs the diagrams over 'Trace (,) (->)' so that feedback loops
+-- are tied into yanked traces.
 --
 -- The DSL is a /deep embedding/: every value remembers how it was built.
 -- That lets us interpret a diagram either as an executable 'IntMorph' (via
@@ -64,8 +64,8 @@ where
 import Circuit.Category qualified as Cat
 import Circuit.Channel (Traced (..))
 import Circuit.Diagram (SDiagram (..), sCopy, sCreate, sDelete, sMerge)
-import Circuit.Layer (run)
-import Circuit.Loop (Loop (..))
+import Circuit.Syntax (eval)
+import Circuit.Trace (Trace, base)
 import Circuit.Poly (Mono, Morphism, applyLens)
 import Circuit.Poly.Int (IN, IntMorph (..))
 import Circuit.Poly.Int qualified as Int
@@ -115,7 +115,7 @@ data Diagram_ a da b db where
 
 -- | A string diagram from one bundle of wires to another.
 --
--- The base category is 'Loop (,) (->)' so that sequential composition can
+-- The base category is 'Trace (,) (->)' so that sequential composition can
 -- tie feedback knots.
 newtype Diagram a da b db = Diagram (Diagram_ a da b db)
 
@@ -142,13 +142,13 @@ skeleton (Diagram d) = go d
     go (Trace_ f) = STrace (go f)
 
 -- | Convert a deep-embedding diagram back to the executable Int corridor.
-toIntMorph :: Diagram a da b db -> IntMorph (,) (Loop (,) (->)) a da b db
+toIntMorph :: Diagram a da b db -> IntMorph (,) (Trace (,) (->)) a da b db
 toIntMorph (Diagram d) = case d of
-  Wire_ -> IntMorph (Lift M.swap)
-  Box_ _ m -> IntMorph (Lift (\(a, db) -> let (b, put) = applyLens m a in (put db, b)))
+  Wire_ -> IntMorph (base M.swap)
+  Box_ _ m -> IntMorph (base (\(a, db) -> let (b, put) = applyLens m a in (put db, b)))
   PrismBox_ match build ->
     IntMorph
-      ( Lift
+      ( base
           ( \(s, e) -> case e of
               Left a -> (build a, match s)
               Right s' -> (s', match s)
@@ -156,27 +156,27 @@ toIntMorph (Diagram d) = case d of
       )
   Beside_ f g -> Int.par (toIntMorph (Diagram f)) (toIntMorph (Diagram g))
   ThenD_ f g -> Int.comp (toIntMorph (Diagram g)) (toIntMorph (Diagram f))
-  Bend_ -> IntMorph (Lift (\((da, a), ()) -> ((a, da), ())))
-  Bend'_ -> IntMorph (Lift (\((), (da, a)) -> ((), (a, da))))
+  Bend_ -> IntMorph (base (\((da, a), ()) -> ((a, da), ())))
+  Bend'_ -> IntMorph (base (\((), (da, a)) -> ((), (a, da))))
   Turn_ f -> turnInt (toIntMorph (Diagram f))
-  UnitL_ -> IntMorph (Lift (runIntMorph Int.unitL))
-  UnitL'_ -> IntMorph (Lift (runIntMorph Int.unitL'))
-  UnitR_ -> IntMorph (Lift (runIntMorph Int.unitR))
-  UnitR'_ -> IntMorph (Lift (runIntMorph Int.unitR'))
-  Assoc_ -> IntMorph (Lift (runIntMorph Int.tensorAssoc))
-  Assoc'_ -> IntMorph (Lift (runIntMorph Int.tensorAssoc'))
-  Swap_ -> IntMorph (Lift (runIntMorph Int.braid))
+  UnitL_ -> IntMorph (base (runIntMorph Int.unitL))
+  UnitL'_ -> IntMorph (base (runIntMorph Int.unitL'))
+  UnitR_ -> IntMorph (base (runIntMorph Int.unitR))
+  UnitR'_ -> IntMorph (base (runIntMorph Int.unitR'))
+  Assoc_ -> IntMorph (base (runIntMorph Int.tensorAssoc))
+  Assoc'_ -> IntMorph (base (runIntMorph Int.tensorAssoc'))
+  Swap_ -> IntMorph (base (runIntMorph Int.braid))
   Trace_ f -> traceIntMorph (toIntMorph (Diagram f))
   where
     traceIntMorph ::
-      IntMorph (,) (Loop (,) (->)) (s, a) (s, da) (s, b) (s, db) ->
-      IntMorph (,) (Loop (,) (->)) a da b db
+      IntMorph (,) (Trace (,) (->)) (s, a) (s, da) (s, b) (s, db) ->
+      IntMorph (,) (Trace (,) (->)) a da b db
     traceIntMorph (IntMorph body) =
       IntMorph
         ( trace
-            ( Lift (\((s1, s2), (da, b)) -> ((s1, da), (s2, b)))
+            ( base (\((s1, s2), (da, b)) -> ((s1, da), (s2, b)))
                 Cat.. body
-                Cat.. Lift (\((s1, s2), (a, db)) -> ((s1, a), (s2, db)))
+                Cat.. base (\((s1, s2), (a, db)) -> ((s1, a), (s2, db)))
             )
         )
 
@@ -303,11 +303,11 @@ swap = Diagram Swap_
 -- output is the backward cotangent on the input side together with the
 -- forward value on the output side.
 runDiagram :: Diagram a da b db -> (a, db) -> (da, b)
-runDiagram d = run (runIntMorph (toIntMorph d))
+runDiagram d = eval (runIntMorph (toIntMorph d))
 
 -- Internal helpers (reused from the previous shallow-embedding definitions).
 
 turnInt ::
-  IntMorph (,) (Loop (,) (->)) a da b db ->
-  IntMorph (,) (Loop (,) (->)) db b da a
-turnInt (IntMorph f) = IntMorph (Lift M.swap Cat.. f Cat.. Lift M.swap)
+  IntMorph (,) (Trace (,) (->)) a da b db ->
+  IntMorph (,) (Trace (,) (->)) db b da a
+turnInt (IntMorph f) = IntMorph (base M.swap Cat.. f Cat.. base M.swap)
