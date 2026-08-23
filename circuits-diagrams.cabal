@@ -15,11 +15,13 @@ description:
   construction, and differential polynomials as syntactic surfaces over the
   semantic machinery in @circuits@, plus dark house-palette SVG rendering of
   the compact-closed string-diagram DSL via @chart-svg@.
+
 build-type: Simple
 tested-with:
   ghc ==9.10.1
   ghc ==9.12.2
   ghc ==9.14.1
+
 extra-doc-files:
   ChangeLog.md
   readme.md

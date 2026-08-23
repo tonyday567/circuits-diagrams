@@ -30,9 +30,9 @@ module Circuit.Poly.DiffP
   )
 where
 
+import Circuit.Bimonoid (MergeZero, Zero (..))
 import Circuit.Category (Category (..))
 import Circuit.Channel (Channel (..), Strength (..))
-import Circuit.Bimonoid (MergeZero, Zero (..))
 import Circuit.Diff.Param (DiffP (..))
 import Circuit.Mat.Dense (Matrix, fromLists, matVec, starMatrix, toLists)
 import Circuit.Poly (Mono, Morphism (..), Poly (..), applyLens, lens)

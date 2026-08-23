@@ -5,7 +5,7 @@ import Options.Applicative
 import Strings.Svg.Examples (writeAllExamples)
 import Prelude
 
-data Config = Config
+newtype Config = Config
   { cfgDir :: FilePath
   }
   deriving (Show)
