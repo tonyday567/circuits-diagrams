@@ -10,3 +10,6 @@ dist/
 *.exe
 .stack-work/
 .ghc.environment.*
+*.ghc.environment.*
+.DS_Store
+cabal.project.local
