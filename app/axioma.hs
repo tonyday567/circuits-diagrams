@@ -7,25 +7,6 @@ module Main (main) where
 
 import Chart qualified
 import Circuit.Category (id, (.))
-import Circuit.System
-  ( Coalgebra (..),
-    Step,
-    SumStep (..),
-    after,
-    branchSystem,
-    branchSystemHet,
-    coalgebraToSystem,
-    composeCoalgebra,
-    duplicateSystem,
-    iterateSystem,
-    lensAsSystem,
-    runSystemMono,
-    runSystemSum,
-    runSystemSumHet,
-    systemAsLens,
-    systemAsProcess,
-    systemToCoalgebraMono,
-  )
 import Circuit.Diagram.Hyper
   ( BoundaryEnd (..),
     HyperGraph (..),
@@ -37,7 +18,7 @@ import Circuit.Diagram.Hyper
     normalise,
   )
 import Circuit.Diff.Param (DiffP (..), splitP)
-import Circuit.Poly hiding (runSystem)
+import Circuit.Poly
 import Circuit.Poly qualified as Poly
 import Circuit.Poly.DiffP
   ( diffPAsFamily,
@@ -91,7 +72,30 @@ import Circuit.Poly.StringDiagram
     unitR',
     wire,
   )
-import Circuit.Process (scan)
+import Circuit.Process (after, iterateSystem, scan, systemAsProcess)
+import Circuit.System
+  ( Coalgebra (..),
+    Step,
+    SumStep (..),
+    System,
+    branchSystem,
+    branchSystemHet,
+    coalgebraToSystem,
+    composeCoalgebra,
+    duplicateSystem,
+    evalToSystem,
+    fromEvalSystem,
+    lensAsSystem,
+    monoDir,
+    runSystem,
+    runSystemMono,
+    runSystemSum,
+    runSystemSumHet,
+    system,
+    systemAsLens,
+    systemToCoalgebraMono,
+    toEvalSystem,
+  )
 import Control.Exception (ErrorCall, evaluate, try)
 import Data.List (scanl')
 import Data.Maybe (isJust, isNothing)
@@ -192,13 +196,13 @@ type MonoC a da = 'CProd ('CConst a) ('CExp da)
 
 -- | Extract the underlying arrow from a 'System'.
 runSystemArr :: System arr s p -> arr (s, Dir p) (s, Pos p)
-runSystemArr = Poly.runSystem
+runSystemArr = runSystem
 
 -- | Embed a parameterised lens @(s, i) -> (s, o)@ as a 'System' over the
 -- monomial @Mono i o@.  The state channel is preserved so the resulting
 -- system can be traced.
 diffPMono :: DiffP p (s, i) (s, o) -> System (DiffP p) s (Mono i o)
-diffPMono (DiffP f) = Poly.system $ DiffP $ \p0 (s, d) ->
+diffPMono (DiffP f) = system $ DiffP $ \p0 (s, d) ->
   let i = case d of Right x -> x; Left v -> absurd v
       ((s', o), back) = f p0 (s, i)
       back' (ds', (do', ())) =
@@ -792,7 +796,7 @@ main = do
     -- depend on the current input direction.
     let sys :: System (->) Int (Mono Int Int)
         sys = fromEvalSystem $ \s -> EP (EK s, EE (\o -> s + o))
-        f = Poly.runSystem sys
+        f = runSystem sys
         (_, pos1) = f (5, Right 10)
         (_, pos2) = f (5, Right 20)
         (_, pos3) = f (7, Right 10)
