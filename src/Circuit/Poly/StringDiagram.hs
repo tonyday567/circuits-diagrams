@@ -62,7 +62,6 @@ module Circuit.Poly.StringDiagram
 where
 
 import Circuit.Category qualified as Cat
-import Circuit.Traced (Yank (..))
 import Circuit.Diagram (SDiagram (..), sCopy, sCreate, sDelete, sMerge)
 import Circuit.Poly (Mono, Morphism, applyLens)
 import Circuit.Poly.Int (IN, IntMorph (..))
@@ -70,6 +69,7 @@ import Circuit.Poly.Int qualified as Int
 import Circuit.Syntax (eval)
 import Circuit.Tensor qualified as M
 import Circuit.Trace (Trace, base)
+import Circuit.Traced (Yank (..))
 import Prelude hiding (id, (.))
 
 -- $setup

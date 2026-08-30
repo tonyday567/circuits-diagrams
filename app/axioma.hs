@@ -18,6 +18,30 @@ import Circuit.Diagram.Hyper
     normalise,
   )
 import Circuit.Diff.Param (DiffP (..), splitP)
+import Circuit.Moore
+  ( Coalgebra (..),
+    Moore,
+    SumStep (..),
+    branchMoore,
+    branchMooreHet,
+    coalgebraToMoore,
+    composeCoalgebra,
+    duplicateMoore,
+    evalToMoore,
+    finalState,
+    fromEvalMoore,
+    iterateMoore,
+    lensAsMoore,
+    monoDir,
+    moore,
+    mooreAsLens,
+    mooreMorphism,
+    mooreToCoalgebraMono,
+    runMooreMono,
+    runMooreSum,
+    runMooreSumHet,
+    toEvalMoore,
+  )
 import Circuit.Poly
 import Circuit.Poly qualified as Poly
 import Circuit.Poly.DiffP
@@ -71,30 +95,6 @@ import Circuit.Poly.StringDiagram
     unitR,
     unitR',
     wire,
-  )
-import Circuit.Moore
-  ( Coalgebra (..),
-    Moore,
-    SumStep (..),
-    branchMoore,
-    branchMooreHet,
-    coalgebraToMoore,
-    composeCoalgebra,
-    duplicateMoore,
-    evalToMoore,
-    finalState,
-    fromEvalMoore,
-    iterateMoore,
-    lensAsMoore,
-    moore,
-    mooreAsLens,
-    mooreMorphism,
-    mooreToCoalgebraMono,
-    monoDir,
-    runMooreMono,
-    runMooreSum,
-    runMooreSumHet,
-    toEvalMoore,
   )
 import Circuit.Process (mooreAsProcess, scan)
 import Control.Exception (ErrorCall, evaluate, try)
