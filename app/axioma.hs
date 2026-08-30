@@ -196,13 +196,13 @@ negLens = lens negate (\_ d -> negate d)
 type MonoC a da = 'CProd ('CConst a) ('CExp da)
 
 -- | Extract the underlying arrow from a 'System'.
-mooreMorphismArr :: Moore (,) arr s p -> arr (s, Dir p) (s, Pos p)
+mooreMorphismArr :: Moore (,) s arr p -> arr (s, Dir p) (s, Pos p)
 mooreMorphismArr = mooreMorphism
 
 -- | Embed a parameterised lens @(s, i) -> (s, o)@ as a 'System' over the
 -- monomial @Mono i o@.  The state channel is preserved so the resulting
 -- system can be traced.
-diffPMono :: DiffP p (s, i) (s, o) -> Moore (,) (DiffP p) s (Mono i o)
+diffPMono :: DiffP p (s, i) (s, o) -> Moore (,) s (DiffP p) (Mono i o)
 diffPMono (DiffP f) = moore $ DiffP $ \p0 (s, d) ->
   let i = case d of Right x -> x; Left v -> absurd v
       ((s', o), back) = f p0 (s, i)
@@ -755,24 +755,24 @@ main = do
   ----------------------------------------------------------------------
   putStrLn "Phase 6: Moore (,) / Process bridge"
   do
-    let sumMoore :: Moore (,) (->) Int (Mono Int Int)
+    let sumMoore :: Moore (,) Int (->) (Mono Int Int)
         sumMoore = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s + o))
         sumProcess = mooreAsProcess sumMoore 0
     assert "mooreAsProcess sum" $ scan sumProcess [1, 2, 3, 4] == [1, 3, 6, 10]
 
   do
-    let countMoore :: Moore (,) (->) Int (Mono () Int)
+    let countMoore :: Moore (,) Int (->) (Mono () Int)
         countMoore = fromEvalMoore $ \s -> EP (EK s, EE (\() -> s + 1))
         countProcess = mooreAsProcess countMoore 0
     assert "mooreAsProcess count" $ scan countProcess [(), (), ()] == [1, 2, 3]
 
   do
-    let sumMoore :: Moore (,) (->) Int (Mono Int Int)
+    let sumMoore :: Moore (,) Int (->) (Mono Int Int)
         sumMoore = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s + o))
     assert "iterateMoore sum" $ iterateMoore sumMoore 0 [1, 2, 3, 4] == [1, 3, 6, 10]
 
   do
-    let countMoore :: Moore (,) (->) Int (Mono () Int)
+    let countMoore :: Moore (,) Int (->) (Mono () Int)
         countMoore = fromEvalMoore $ \s -> EP (EK s, EE (\() -> s + 1))
     assert "iterateMoore count" $ iterateMoore countMoore 0 [(), (), ()] == [1, 2, 3]
 
@@ -781,9 +781,9 @@ main = do
     --
     -- Converting a Moore (,) to a Process and scanning it yields the same output
     -- stream as iterateMoore.
-    let sumMoore :: Moore (,) (->) Int (Mono Int Int)
+    let sumMoore :: Moore (,) Int (->) (Mono Int Int)
         sumMoore = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s + o))
-        countMoore :: Moore (,) (->) Int (Mono () Int)
+        countMoore :: Moore (,) Int (->) (Mono () Int)
         countMoore = fromEvalMoore $ \s -> EP (EK s, EE (\() -> s + 1))
     assert "K1 mooreAsProcess agrees with iterateMoore (sum)" $
       scan (mooreAsProcess sumMoore 0) [1, 2, 3, 4] == iterateMoore sumMoore 0 [1, 2, 3, 4]
@@ -795,7 +795,7 @@ main = do
     --
     -- For a Moore machine over a monomial interface, the current output must not
     -- depend on the current input direction.
-    let sys :: Moore (,) (->) Int (Mono Int Int)
+    let sys :: Moore (,) Int (->) (Mono Int Int)
         sys = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s + o))
         f = mooreMorphism sys
         (_, pos1) = f (5, Right 10)
@@ -843,7 +843,7 @@ main = do
       abs (dp1 - dp1') < 1e-10 && abs (dp2 - dp2') < 1e-10
 
   do
-    let sumMoore :: Moore (,) (->) Int (Mono Int Int)
+    let sumMoore :: Moore (,) Int (->) (Mono Int Int)
         sumMoore = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s + o))
     assert "duplicateMoore sum" $
       case toEvalMoore (duplicateMoore sumMoore) 0 of
@@ -855,7 +855,7 @@ main = do
             && k (Right 10, Right 20) == 30
 
   do
-    let sumMoore :: Moore (,) (->) Int (Mono Int Int)
+    let sumMoore :: Moore (,) Int (->) (Mono Int Int)
         sumMoore = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s + o))
 
         -- Feed one input through duplicateMoore.
@@ -884,7 +884,7 @@ main = do
     -- Counit law: extracting the inner position from duplicateMoore recovers
     -- the original step function. This is the comonad counit for systems where
     -- the output position is the state.
-    let countMoore :: Moore (,) (->) Int (Mono () Int)
+    let countMoore :: Moore (,) Int (->) (Mono () Int)
         countMoore = fromEvalMoore $ \s -> EP (EK s, EE (\() -> s + 1))
     assert "duplicateMoore counit (count)" $
       case toEvalMoore (duplicateMoore countMoore) 0 of
@@ -897,7 +897,7 @@ main = do
   -- S1: coalgebra = lens (Moore (,) s p ≅ Poly(S y^S, p))
   ----------------------------------------------------------------------
   do
-    let sys :: Moore (,) (->) Int (Mono Int Int)
+    let sys :: Moore (,) Int (->) (Mono Int Int)
         sys = fromEvalMoore $ \s -> EP (EK (s * 2), EE (\i -> s + i))
         sys' = lensAsMoore (mooreAsLens sys)
         -- Round-trip preserves the (output, transition) view at every state.
@@ -924,7 +924,7 @@ main = do
   -- S2: comonoid = category concretely
   ----------------------------------------------------------------------
   do
-    let sys :: Moore (,) (->) Int (Mono Int Int)
+    let sys :: Moore (,) Int (->) (Mono Int Int)
         sys = fromEvalMoore $ \s -> EP (EK s, EE (\i -> s + i))
         s0 = 0
         xs = [1, 2, 3] :: [Int]
@@ -944,7 +944,7 @@ main = do
     -- A Coalgebra s 'Y q avoids the flat Dir q family by using Eval q s as
     -- the step type: Eval is the GADT that pairs each position with its own
     -- direction consumer. Here q is monomial for simplicity.
-    let sys :: Moore (,) (->) Int (Mono Int Int)
+    let sys :: Moore (,) Int (->) (Mono Int Int)
         sys = fromEvalMoore $ \s -> EP (EK (s * 2), EE (\i -> s + i))
         coal :: Coalgebra Int 'Y (Mono Int Int)
         coal = mooreToCoalgebraMono sys
@@ -1002,7 +1002,7 @@ main = do
         -- Helpers to run a nested composition product of three monomials and
         -- collect the (o1, o2, o3) output triples plus the final state.
         runNested ::
-          Moore (,) (->) s (Comp (Mono Int Int) (Comp (Mono Int Int) (Mono Int Int))) ->
+          Moore (,) s (->) (Comp (Mono Int Int) (Comp (Mono Int Int) (Mono Int Int))) ->
           s ->
           [(Int, Int, Int)] ->
           [(Int, Int, Int, s)]
@@ -1016,7 +1016,7 @@ main = do
                in (o1, o2, o3, s') : runNested sys s' is
 
         runLeftNested ::
-          Moore (,) (->) s (Comp (Comp (Mono Int Int) (Mono Int Int)) (Mono Int Int)) ->
+          Moore (,) s (->) (Comp (Comp (Mono Int Int) (Mono Int Int)) (Mono Int Int)) ->
           s ->
           [(Int, Int, Int)] ->
           [(Int, Int, Int, s)]
@@ -1035,11 +1035,11 @@ main = do
         leftSys =
           coalgebraToMoore
             (composeCoalgebra (composeCoalgebra cA cB) cC) ::
-            Moore (,) (->) ((Int, Int), Int) (Comp (Comp (Mono Int Int) (Mono Int Int)) (Mono Int Int))
+            Moore (,) ((Int, Int), Int) (->) (Comp (Comp (Mono Int Int) (Mono Int Int)) (Mono Int Int))
         rightSys =
           coalgebraToMoore
             (composeCoalgebra cA (composeCoalgebra cB cC)) ::
-            Moore (,) (->) (Int, (Int, Int)) (Comp (Mono Int Int) (Comp (Mono Int Int) (Mono Int Int)))
+            Moore (,) (Int, (Int, Int)) (->) (Comp (Mono Int Int) (Comp (Mono Int Int) (Mono Int Int)))
 
         inputs = [(1, 2, 3), (4, 5, 6), (7, 8, 9)] :: [(Int, Int, Int)]
         leftResults = runLeftNested leftSys ((0, 10), 20) inputs
@@ -1062,11 +1062,11 @@ main = do
   -- Phase 6: Sum-interface agent (stage 3a headline)
   ----------------------------------------------------------------------
   do
-    let sumSys :: Moore (,) (->) Int (Mono Int Int)
+    let sumSys :: Moore (,) Int (->) (Mono Int Int)
         sumSys = fromEvalMoore $ \s -> EP (EK s, EE (\n -> s + n))
-        doubleSys :: Moore (,) (->) Int (Mono Int Int)
+        doubleSys :: Moore (,) Int (->) (Mono Int Int)
         doubleSys = fromEvalMoore $ \s -> EP (EK (s * 2), EE (\o -> s * 2 + o))
-        branchSys :: Moore (,) (->) Int ('Sum (Mono Int Int) (Mono Int Int))
+        branchSys :: Moore (,) Int (->) ('Sum (Mono Int Int) (Mono Int Int))
         branchSys = branchMoore even sumSys doubleSys
         (out0, step0) = runMooreSum branchSys 0
         s1 = step0 5
@@ -1080,9 +1080,9 @@ main = do
   do
     -- Round-trip: running a Sum-interface system recovers the underlying
     -- monomial behaviours branch-for-branch.
-    let incSys :: Moore (,) (->) Int (Mono Int Int)
+    let incSys :: Moore (,) Int (->) (Mono Int Int)
         incSys = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s + o))
-        decSys :: Moore (,) (->) Int (Mono Int Int)
+        decSys :: Moore (,) Int (->) (Mono Int Int)
         decSys = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s - o))
         branchSys = branchMoore (\s -> s >= 0) incSys decSys
         (outNeg, stepNeg) = runMooreSum branchSys (-1)
@@ -1097,11 +1097,11 @@ main = do
     -- types, so the runner uses a GADT to make the position-dependency total.
     -- This is the real stage-3a headline: interface-level choice with a
     -- position-dependent input type, no error, no 'Dir' row needed.
-    let sumSys :: Moore (,) (->) Int (Mono Int Int)
+    let sumSys :: Moore (,) Int (->) (Mono Int Int)
         sumSys = fromEvalMoore $ \s -> EP (EK s, EE (\n -> s + n))
-        countSys :: Moore (,) (->) Int (Mono () Int)
+        countSys :: Moore (,) Int (->) (Mono () Int)
         countSys = fromEvalMoore $ \s -> EP (EK s, EE (\() -> s + 1))
-        branchSys :: Moore (,) (->) Int ('Sum (Mono Int Int) (Mono () Int))
+        branchSys :: Moore (,) Int (->) ('Sum (Mono Int Int) (Mono () Int))
         branchSys = branchMooreHet even sumSys countSys
         s1 = case runMooreSumHet branchSys 0 of
           SumStepL _ f -> f 5
@@ -1115,11 +1115,11 @@ main = do
   do
     -- S4 · mode-dependence: position is determined by the carrier; the
     -- direction type is determined by the presented position.
-    let sumSys :: Moore (,) (->) Int (Mono Int Int)
+    let sumSys :: Moore (,) Int (->) (Mono Int Int)
         sumSys = fromEvalMoore $ \s -> EP (EK s, EE (\n -> s + n))
-        countSys :: Moore (,) (->) Int (Mono () Int)
+        countSys :: Moore (,) Int (->) (Mono () Int)
         countSys = fromEvalMoore $ \s -> EP (EK s, EE (\() -> s + 1))
-        branchSys :: Moore (,) (->) Int ('Sum (Mono Int Int) (Mono () Int))
+        branchSys :: Moore (,) Int (->) ('Sum (Mono Int Int) (Mono () Int))
         branchSys = branchMooreHet even sumSys countSys
         -- (a) the presented position is a function of the carrier alone.
         branchOf s = case runMooreSumHet branchSys s of
