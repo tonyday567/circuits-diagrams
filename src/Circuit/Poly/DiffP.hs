@@ -32,7 +32,7 @@ where
 
 import Circuit.Bimonoid (MergeZero, Zero (..))
 import Circuit.Category (Category (..))
-import Circuit.Channel (Channel (..), Strength (..))
+import Circuit.Traced (Assoc (..), Slide (..), Strength (..), Yank (..))
 import Circuit.Diff.Param (DiffP (..))
 import Circuit.Mat.Dense (Matrix, fromLists, matVec, starMatrix, toLists)
 import Circuit.Poly (Mono, Morphism (..), Poly (..), applyLens, lens)

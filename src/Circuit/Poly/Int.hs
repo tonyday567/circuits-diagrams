@@ -49,11 +49,11 @@ where
 
 import Circuit.Category ((.))
 import Circuit.Category qualified as Cat (Category (..))
-import Circuit.Channel (Channel (..), Traced (..))
 import Circuit.Poly (Mono, Morphism (Compose), applyLens, lens)
 import Circuit.Syntax (Syntax (..), eval, (:+:) (..))
 import Circuit.Tensor qualified as M (Action (..), Tensor (..))
-import Circuit.Trace (SigYank (..), Trace, base, yank)
+import Circuit.Trace (SigYank (..), Trace, base)
+import Circuit.Traced (Assoc (..), Slide (..), Yank (..), yank)
 import Data.Kind (Type)
 import Prelude hiding (id, (.))
 
@@ -61,14 +61,14 @@ import Prelude hiding (id, (.))
 -- >>> import Prelude hiding (id, (.))
 -- >>> import Circuit.Category ((.))
 -- >>> import Circuit.Category qualified as Cat
--- >>> import Circuit.Trace (Trace, SigYank (..), base, yank)
+-- >>> import Circuit.Trace (Trace, SigYank (..), base)
 -- >>> import Circuit.Syntax (Syntax (..), (:+:) (..), eval)
--- >>> import Circuit.Channel (Traced (..), Channel (..), trace)
+-- >>> import Circuit.Traced (Assoc (..), Slide (..), Yank (..), yank)
 -- >>> import Circuit.Tensor (Action (..), Tensor (..))
 -- >>> import Circuit.Poly (dagger, lens, applyLens, Morphism (..), Mono)
 -- >>> import Data.Bifunctor (Bifunctor (..))
 -- >>> :set -XGADTs -XStandaloneDeriving -XFlexibleInstances -XFlexibleContexts -XScopedTypeVariables -XTypeApplications
--- >>> isYank :: Trace (,) (->) a b -> Bool; isYank x = case x of { Op (R (Yank _)) -> True; _ -> False }
+-- >>> isYank :: Trace (,) (->) a b -> Bool; isYank x = case x of { Oper (R (Yank _)) -> True; _ -> False }
 -- >>> class Eq a => Finite a where universe :: [a]
 -- >>> instance Finite () where universe = [()]
 -- >>> instance Finite Bool where universe = [False, True]
@@ -229,11 +229,11 @@ dual (IntMorph f) = IntMorph (M.braid . f . M.braid)
 -- "one-Yank"
 comp ::
   forall t arr ap am bp bm cp cm.
-  (M.Action t arr, Traced t arr) =>
+  (M.Action t arr, Yank t arr) =>
   IntMorph t arr bp bm cp cm ->
   IntMorph t arr ap am bp bm ->
   IntMorph t arr ap am cp cm
-comp (IntMorph g) (IntMorph f) = IntMorph (trace (middleOut . (g `M.tensor` f) . middleIn))
+comp (IntMorph g) (IntMorph f) = IntMorph (yank (middleOut . (g `M.tensor` f) . middleIn))
   where
     id_ap = Cat.id
     id_am = Cat.id
@@ -265,7 +265,7 @@ comp (IntMorph g) (IntMorph f) = IntMorph (trace (middleOut . (g `M.tensor` f) .
 -- the factors into the required @arr (t (t ap cp) (t bm dm)) (t (t am cm) (t bp dp))@ shape.
 intTensor ::
   forall t arr ap am bp bm cp cm dp dm.
-  (M.Action t arr, Channel t arr) =>
+  (M.Action t arr, Assoc t arr) =>
   IntMorph t arr ap am bp bm ->
   IntMorph t arr cp cm dp dm ->
   IntMorph t arr (t ap cp) (t am cm) (t bp dp) (t bm dm)
@@ -368,7 +368,7 @@ intBraid = IntMorph $ \ ~((x, y), (dy, dx)) -> ((dx, dy), (y, x))
 -- input unchanged.
 --
 -- >>> let i = id :: IntMorph Either (->) Int Int Int Int
--- >>> trace (runIntMorph i) (42 :: Int)
+-- >>> yank (runIntMorph i) (42 :: Int)
 -- 42
 
 -- | Mat Bool middle trace with coupled blocks.  The feedback channel is

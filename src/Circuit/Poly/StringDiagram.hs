@@ -62,7 +62,7 @@ module Circuit.Poly.StringDiagram
 where
 
 import Circuit.Category qualified as Cat
-import Circuit.Channel (Traced (..))
+import Circuit.Traced (Yank (..))
 import Circuit.Diagram (SDiagram (..), sCopy, sCreate, sDelete, sMerge)
 import Circuit.Poly (Mono, Morphism, applyLens)
 import Circuit.Poly.Int (IN, IntMorph (..))
@@ -173,7 +173,7 @@ toIntMorph (Diagram d) = case d of
       IntMorph (,) (Trace (,) (->)) a da b db
     traceIntMorph (IntMorph body) =
       IntMorph
-        ( trace
+        ( yank
             ( base (\((s1, s2), (da, b)) -> ((s1, da), (s2, b)))
                 Cat.. body
                 Cat.. base (\((s1, s2), (a, db)) -> ((s1, a), (s2, db)))
