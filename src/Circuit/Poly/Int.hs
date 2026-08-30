@@ -68,7 +68,7 @@ import Prelude hiding (id, (.))
 -- >>> import Circuit.Poly (dagger, lens, applyLens, Morphism (..), Mono)
 -- >>> import Data.Bifunctor (Bifunctor (..))
 -- >>> :set -XGADTs -XStandaloneDeriving -XFlexibleInstances -XFlexibleContexts -XScopedTypeVariables -XTypeApplications
--- >>> isYank :: Trace (,) (->) a b -> Bool; isYank x = case x of { Oper (R (Yank _)) -> True; _ -> False }
+-- >>> isYank :: Trace (,) (->) a b -> Bool; isYank x = case x of { Oper (R (YankBody _)) -> True; _ -> False }
 -- >>> class Eq a => Finite a where universe :: [a]
 -- >>> instance Finite () where universe = [()]
 -- >>> instance Finite Bool where universe = [False, True]
