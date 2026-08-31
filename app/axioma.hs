@@ -22,7 +22,6 @@ import Circuit.Moore
   ( Coalgebra (..),
     Moore,
     SumStep (..),
-    asPProcess,
     branchMoore,
     branchMooreHet,
     coalgebraToMoore,
@@ -30,18 +29,15 @@ import Circuit.Moore
     duplicateMoore,
     evalToMoore,
     fromEvalMoore,
-    lensAsMoore,
     monoDir,
     moore,
-    mooreAsLens,
-    mooreAsProcess,
     mooreMorphism,
     mooreToCoalgebraMono,
-    runMooreMono,
     runMooreSum,
     runMooreSumHet,
     toEvalMoore,
   )
+import Circuit.Optic (lensAsPProcess, pprocessAsLens)
 import Circuit.Poly
 import Circuit.Poly qualified as Poly
 import Circuit.Poly.DiffP
@@ -96,7 +92,7 @@ import Circuit.Poly.StringDiagram
     unitR',
     wire,
   )
-import Circuit.Process (finalPProcess, scan, scanPProcess)
+import Circuit.Process (PProcess (..), asPProcess, asProcess, finalPProcess, scan, scanPProcess)
 import Control.Exception (ErrorCall, evaluate, try)
 import Data.List (scanl')
 import Data.Maybe (isJust, isNothing)
@@ -128,6 +124,9 @@ iterateDiag sys s0 = scanPProcess (asPProcess sys s0)
 
 finalDiag :: Moore (,) s (->) (Mono i o) -> s -> [i] -> s
 finalDiag sys s0 = finalPProcess (asPProcess sys s0)
+
+runMono :: Moore (,) s (->) (Mono i o) -> s -> (o, i -> s)
+runMono sys s = case toEvalMoore sys s of EP (EK o, EE f) -> (o, f)
 
 approx :: Double -> Double -> Bool
 approx a b = abs (a - b) < 0.08
@@ -764,14 +763,14 @@ main = do
   do
     let sumMoore :: Moore (,) Int (->) (Mono Int Int)
         sumMoore = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s + o))
-        sumProcess = mooreAsProcess sumMoore 0
-    assert "mooreAsProcess sum" $ scan sumProcess [1, 2, 3, 4] == [1, 3, 6, 10]
+        sumProcess = asProcess (asPProcess sumMoore 0)
+    assert "asProcess . asPProcess sum" $ scan sumProcess [1, 2, 3, 4] == [1, 3, 6, 10]
 
   do
     let countMoore :: Moore (,) Int (->) (Mono () Int)
         countMoore = fromEvalMoore $ \s -> EP (EK s, EE (\() -> s + 1))
-        countProcess = mooreAsProcess countMoore 0
-    assert "mooreAsProcess count" $ scan countProcess [(), (), ()] == [1, 2, 3]
+        countProcess = asProcess (asPProcess countMoore 0)
+    assert "asProcess . asPProcess count" $ scan countProcess [(), (), ()] == [1, 2, 3]
 
   do
     let sumMoore :: Moore (,) Int (->) (Mono Int Int)
@@ -792,10 +791,10 @@ main = do
         sumMoore = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s + o))
         countMoore :: Moore (,) Int (->) (Mono () Int)
         countMoore = fromEvalMoore $ \s -> EP (EK s, EE (\() -> s + 1))
-    assert "K1 mooreAsProcess agrees with iterateDiag (sum)" $
-      scan (mooreAsProcess sumMoore 0) [1, 2, 3, 4] == iterateDiag sumMoore 0 [1, 2, 3, 4]
-    assert "K1 mooreAsProcess agrees with iterateDiag (count)" $
-      scan (mooreAsProcess countMoore 0) [(), (), ()] == iterateDiag countMoore 0 [(), (), ()]
+    assert "K1 asProcess . asPProcess agrees with iterateDiag (sum)" $
+      scan (asProcess (asPProcess sumMoore 0)) [1, 2, 3, 4] == iterateDiag sumMoore 0 [1, 2, 3, 4]
+    assert "K1 asProcess . asPProcess agrees with iterateDiag (count)" $
+      scan (asProcess (asPProcess countMoore 0)) [(), (), ()] == iterateDiag countMoore 0 [(), (), ()]
 
   do
     -- K3 · Moore-ness: the output component factors through the carrier alone.
@@ -880,7 +879,7 @@ main = do
         -- Right-grouped three inputs: duplicate the left factor.
         feed3R sys s ((o1, o2), o3) =
           let s2 = feed2 sys s (o1, o2)
-           in snd (runMooreMono sys s2) o3
+           in snd (runMono sys s2) o3
 
     assert "duplicateMoore coassociativity" $
       feed3L sumMoore 0 (1, (2, 3)) == 6
@@ -906,25 +905,25 @@ main = do
   do
     let sys :: Moore (,) Int (->) (Mono Int Int)
         sys = fromEvalMoore $ \s -> EP (EK (s * 2), EE (\i -> s + i))
-        sys' = lensAsMoore (mooreAsLens sys)
+        pp = asPProcess sys 0
         -- Round-trip preserves the (output, transition) view at every state.
         roundTripOk s =
-          let (o, f) = runMooreMono sys s
-              (o', f') = runMooreMono sys' s
-           in o == o' && all (\i -> f i == f' i) [-5 .. 5]
-    assert "S1: lensAsMoore . mooreAsLens round-trips" $
+          let pp' = lensAsPProcess (pprocessAsLens pp) s
+           in pprocessExtract pp s == pprocessExtract pp' s
+                && all (\i -> pprocessStep pp s i == pprocessStep pp' s i) [-5 .. 5]
+    assert "S1: lensAsPProcess . pprocessAsLens round-trips" $
       all roundTripOk [0 .. 5]
 
     -- The other direction of the iso: build a lens directly, round-trip
-    -- through a System, and compare on positions and directions.
+    -- through a pointed process, and compare on positions and directions.
     let m :: Morphism (Mono Int Int) (Mono Int Int)
         m = lens (\s -> s * 2) (\s i -> s + i)
-        m' = mooreAsLens (lensAsMoore m)
+        m' = pprocessAsLens (lensAsPProcess m 0)
         roundTripLensOk s =
           let (o, put) = applyLens m s
               (o', put') = applyLens m' s
            in o == o' && all (\i -> put i == put' i) [-5 .. 5]
-    assert "S1: mooreAsLens . lensAsMoore round-trips" $
+    assert "S1: pprocessAsLens . lensAsPProcess round-trips" $
       all roundTripLensOk [0 .. 5]
 
   ----------------------------------------------------------------------
