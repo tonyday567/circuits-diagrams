@@ -22,19 +22,19 @@ import Circuit.Moore
   ( Coalgebra (..),
     Moore,
     SumStep (..),
+    asPProcess,
     branchMoore,
     branchMooreHet,
     coalgebraToMoore,
     composeCoalgebra,
     duplicateMoore,
     evalToMoore,
-    finalState,
     fromEvalMoore,
-    iterateMoore,
     lensAsMoore,
     monoDir,
     moore,
     mooreAsLens,
+    mooreAsProcess,
     mooreMorphism,
     mooreToCoalgebraMono,
     runMooreMono,
@@ -96,7 +96,7 @@ import Circuit.Poly.StringDiagram
     unitR',
     wire,
   )
-import Circuit.Process (mooreAsProcess, scan)
+import Circuit.Process (finalPProcess, scan, scanPProcess)
 import Control.Exception (ErrorCall, evaluate, try)
 import Data.List (scanl')
 import Data.Maybe (isJust, isNothing)
@@ -121,6 +121,13 @@ assertError msg action = do
     Right _ -> do
       putStrLn ("  FAIL " ++ msg)
       exitFailure
+
+-- | Replacements for the removed Moore runners.
+iterateDiag :: Moore (,) s (->) (Mono i o) -> s -> [i] -> [o]
+iterateDiag sys s0 = scanPProcess (asPProcess sys s0)
+
+finalDiag :: Moore (,) s (->) (Mono i o) -> s -> [i] -> s
+finalDiag sys s0 = finalPProcess (asPProcess sys s0)
 
 approx :: Double -> Double -> Bool
 approx a b = abs (a - b) < 0.08
@@ -769,26 +776,26 @@ main = do
   do
     let sumMoore :: Moore (,) Int (->) (Mono Int Int)
         sumMoore = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s + o))
-    assert "iterateMoore sum" $ iterateMoore sumMoore 0 [1, 2, 3, 4] == [1, 3, 6, 10]
+    assert "iterateDiag sum" $ iterateDiag sumMoore 0 [1, 2, 3, 4] == [1, 3, 6, 10]
 
   do
     let countMoore :: Moore (,) Int (->) (Mono () Int)
         countMoore = fromEvalMoore $ \s -> EP (EK s, EE (\() -> s + 1))
-    assert "iterateMoore count" $ iterateMoore countMoore 0 [(), (), ()] == [1, 2, 3]
+    assert "iterateDiag count" $ iterateDiag countMoore 0 [(), (), ()] == [1, 2, 3]
 
   do
     -- K1 · closing agrees with running open.
     --
     -- Converting a Moore (,) to a Process and scanning it yields the same output
-    -- stream as iterateMoore.
+    -- stream as iterateDiag.
     let sumMoore :: Moore (,) Int (->) (Mono Int Int)
         sumMoore = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s + o))
         countMoore :: Moore (,) Int (->) (Mono () Int)
         countMoore = fromEvalMoore $ \s -> EP (EK s, EE (\() -> s + 1))
-    assert "K1 mooreAsProcess agrees with iterateMoore (sum)" $
-      scan (mooreAsProcess sumMoore 0) [1, 2, 3, 4] == iterateMoore sumMoore 0 [1, 2, 3, 4]
-    assert "K1 mooreAsProcess agrees with iterateMoore (count)" $
-      scan (mooreAsProcess countMoore 0) [(), (), ()] == iterateMoore countMoore 0 [(), (), ()]
+    assert "K1 mooreAsProcess agrees with iterateDiag (sum)" $
+      scan (mooreAsProcess sumMoore 0) [1, 2, 3, 4] == iterateDiag sumMoore 0 [1, 2, 3, 4]
+    assert "K1 mooreAsProcess agrees with iterateDiag (count)" $
+      scan (mooreAsProcess countMoore 0) [(), (), ()] == iterateDiag countMoore 0 [(), (), ()]
 
   do
     -- K3 · Moore-ness: the output component factors through the carrier alone.
@@ -931,11 +938,11 @@ main = do
         ys = [4, 5] :: [Int]
     -- The empty word is the identity morphism.
     assert "S2: empty input word is identity" $
-      iterateMoore sys s0 [] == []
+      iterateDiag sys s0 [] == []
     -- Composition of input words is concatenation.
     assert "S2: input words compose by concatenation" $
-      iterateMoore sys s0 (xs ++ ys)
-        == iterateMoore sys s0 xs ++ iterateMoore sys (finalState sys s0 xs) ys
+      iterateDiag sys s0 (xs ++ ys)
+        == iterateDiag sys s0 xs ++ iterateDiag sys (finalDiag sys s0 xs) ys
 
   ----------------------------------------------------------------------
   -- Coalgebra type with GADT fix (phase 2 stub)
@@ -951,7 +958,7 @@ main = do
         sys' = coalgebraToMoore coal
     -- Round-trip through Coalgebra and back.
     assert "Coalgebra bridge: mooreToCoalgebraMono . coalgebraToMoore round-trips" $
-      iterateMoore sys' 0 [1, 2, 3] == iterateMoore sys 0 [1, 2, 3]
+      iterateDiag sys' 0 [1, 2, 3] == iterateDiag sys 0 [1, 2, 3]
     -- act and upd agree on positions; act is the static wiring pattern and
     -- upd is the full dynamics, so we compare output positions only.
     let eval1 = upd coal 0 (EY (0 :: Int))
@@ -972,7 +979,7 @@ main = do
             }
         sys = coalgebraToMoore coal
     assert "Coalgebra Y -> Mono runs as System" $
-      iterateMoore sys 0 [1, 2, 3] == [2, 6, 12]
+      iterateDiag sys 0 [1, 2, 3] == [2, 6, 12]
 
   ----------------------------------------------------------------------
   -- O4: coalgebra composition is associative
