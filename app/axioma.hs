@@ -18,27 +18,26 @@ import Circuit.Diagram.Hyper
     normalise,
   )
 import Circuit.Diff.Param (DiffP (..), splitP)
-import Circuit.Equip (Cell (..))
 import Circuit.Moore
   ( Coalgebra (..),
-    Moore,
+    MachineP,
     SumStep (..),
-    branchMoore,
-    branchMooreHet,
+    branchMachineP,
+    branchMachinePHet,
     coalgebraToMoore,
     composeCoalgebra,
-    duplicateMoore,
+    duplicateMachineP,
     evalToMoore,
-    fromEvalMoore,
+    fromEvalMachineP,
+    machineMorphismP,
+    machineP,
+    machinePToCoalgebraMono,
     monoDir,
-    moore,
-    mooreMorphism,
-    mooreToCoalgebraMono,
-    runMooreSum,
-    runMooreSumHet,
-    toEvalMoore,
+    runMachinePSum,
+    runMachinePSumHet,
+    toEvalMachineP,
   )
-import Circuit.Optic (lensAsPProcess, pprocessAsLens)
+import Circuit.Optic (lensAsProcessP, processAsLensP)
 import Circuit.Poly
 import Circuit.Poly qualified as Poly
 import Circuit.Poly.DiffP
@@ -93,7 +92,7 @@ import Circuit.Poly.StringDiagram
     unitR',
     wire,
   )
-import Circuit.Process (PProcess (..), asPProcess, asProcess, finalPProcess, scan, scanPProcess)
+import Circuit.Process (ProcessP (..), asProcess, asProcessP, finalProcessP, scan, scanProcessP)
 import Control.Exception (ErrorCall, evaluate, try)
 import Data.List (scanl')
 import Data.Maybe (isJust, isNothing)
@@ -119,15 +118,15 @@ assertError msg action = do
       putStrLn ("  FAIL " ++ msg)
       exitFailure
 
--- | Replacements for the removed Moore runners.
-iterateDiag :: Moore (,) s (->) (Mono i o) -> s -> [i] -> [o]
-iterateDiag sys s0 = scanPProcess (asPProcess sys (Cell s0))
+-- | Replacements for the removed MachineP runners.
+iterateDiag :: MachineP (,) s (->) (Mono i o) -> s -> [i] -> [o]
+iterateDiag sys s0 = scanProcessP (asProcessP sys s0)
 
-finalDiag :: Moore (,) s (->) (Mono i o) -> s -> [i] -> s
-finalDiag sys s0 = finalPProcess (asPProcess sys (Cell s0))
+finalDiag :: MachineP (,) s (->) (Mono i o) -> s -> [i] -> s
+finalDiag sys s0 = finalProcessP (asProcessP sys s0)
 
-runMono :: Moore (,) s (->) (Mono i o) -> s -> (o, i -> s)
-runMono sys s = case toEvalMoore sys s of EP (EK o, EE f) -> (o, f)
+runMono :: MachineP (,) s (->) (Mono i o) -> s -> (o, i -> s)
+runMono sys s = case toEvalMachineP sys s of EP (EK o, EE f) -> (o, f)
 
 approx :: Double -> Double -> Bool
 approx a b = abs (a - b) < 0.08
@@ -203,14 +202,14 @@ negLens = lens negate (\_ d -> negate d)
 type MonoC a da = 'CProd ('CConst a) ('CExp da)
 
 -- | Extract the underlying arrow from a 'System'.
-mooreMorphismArr :: Moore (,) s arr p -> arr (s, Dir p) (s, Pos p)
-mooreMorphismArr = mooreMorphism
+machineMorphismPArr :: MachineP (,) s arr p -> arr (s, Dir p) (s, Pos p)
+machineMorphismPArr = machineMorphismP
 
 -- | Embed a parameterised lens @(s, i) -> (s, o)@ as a 'System' over the
 -- monomial @Mono i o@.  The state channel is preserved so the resulting
 -- system can be traced.
-diffPMono :: DiffP p (s, i) (s, o) -> Moore (,) s (DiffP p) (Mono i o)
-diffPMono (DiffP f) = moore $ DiffP $ \p0 (s, d) ->
+diffPMono :: DiffP p (s, i) (s, o) -> MachineP (,) s (DiffP p) (Mono i o)
+diffPMono (DiffP f) = machineP $ DiffP $ \p0 (s, d) ->
   let i = case d of Right x -> x; Left v -> absurd v
       ((s', o), back) = f p0 (s, i)
       back' (ds', (do', ())) =
@@ -241,7 +240,7 @@ g4Step = DiffP $ \p (s, i) ->
 
 -- | Closed G4b system via star trace.
 g4bClosed :: DiffP Double Double Double
-g4bClosed = monoPost . traceDiffPD 0.0 1e-12 200 (mooreMorphismArr (diffPMono g4Step)) . monoPre
+g4bClosed = monoPost . traceDiffPD 0.0 1e-12 200 (machineMorphismPArr (diffPMono g4Step)) . monoPre
 
 -- | Run a parameterised step over a finite prefix, returning the output trace
 -- and the parameter gradient accumulated from the supplied output cotangents.
@@ -758,53 +757,53 @@ main = do
         == (Left 8, Left 7)
 
   ----------------------------------------------------------------------
-  -- Phase 6: Moore (,) / Process bridge
+  -- Phase 6: MachineP (,) / Process bridge
   ----------------------------------------------------------------------
-  putStrLn "Phase 6: Moore (,) / Process bridge"
+  putStrLn "Phase 6: MachineP (,) / Process bridge"
   do
-    let sumMoore :: Moore (,) Int (->) (Mono Int Int)
-        sumMoore = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s + o))
-        sumProcess = asProcess (asPProcess sumMoore (Cell 0))
-    assert "asProcess . asPProcess sum" $ scan sumProcess [1, 2, 3, 4] == [1, 3, 6, 10]
+    let sumMachineP :: MachineP (,) Int (->) (Mono Int Int)
+        sumMachineP = fromEvalMachineP $ \s -> EP (EK s, EE (\o -> s + o))
+        sumProcess = asProcess (asProcessP sumMachineP 0)
+    assert "asProcess . asProcessP sum" $ scan sumProcess [1, 2, 3, 4] == [1, 3, 6, 10]
 
   do
-    let countMoore :: Moore (,) Int (->) (Mono () Int)
-        countMoore = fromEvalMoore $ \s -> EP (EK s, EE (\() -> s + 1))
-        countProcess = asProcess (asPProcess countMoore (Cell 0))
-    assert "asProcess . asPProcess count" $ scan countProcess [(), (), ()] == [1, 2, 3]
+    let countMachineP :: MachineP (,) Int (->) (Mono () Int)
+        countMachineP = fromEvalMachineP $ \s -> EP (EK s, EE (\() -> s + 1))
+        countProcess = asProcess (asProcessP countMachineP 0)
+    assert "asProcess . asProcessP count" $ scan countProcess [(), (), ()] == [1, 2, 3]
 
   do
-    let sumMoore :: Moore (,) Int (->) (Mono Int Int)
-        sumMoore = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s + o))
-    assert "iterateDiag sum" $ iterateDiag sumMoore 0 [1, 2, 3, 4] == [1, 3, 6, 10]
+    let sumMachineP :: MachineP (,) Int (->) (Mono Int Int)
+        sumMachineP = fromEvalMachineP $ \s -> EP (EK s, EE (\o -> s + o))
+    assert "iterateDiag sum" $ iterateDiag sumMachineP 0 [1, 2, 3, 4] == [1, 3, 6, 10]
 
   do
-    let countMoore :: Moore (,) Int (->) (Mono () Int)
-        countMoore = fromEvalMoore $ \s -> EP (EK s, EE (\() -> s + 1))
-    assert "iterateDiag count" $ iterateDiag countMoore 0 [(), (), ()] == [1, 2, 3]
+    let countMachineP :: MachineP (,) Int (->) (Mono () Int)
+        countMachineP = fromEvalMachineP $ \s -> EP (EK s, EE (\() -> s + 1))
+    assert "iterateDiag count" $ iterateDiag countMachineP 0 [(), (), ()] == [1, 2, 3]
 
   do
     -- K1 · closing agrees with running open.
     --
-    -- Converting a Moore (,) to a Process and scanning it yields the same output
+    -- Converting a MachineP (,) to a Process and scanning it yields the same output
     -- stream as iterateDiag.
-    let sumMoore :: Moore (,) Int (->) (Mono Int Int)
-        sumMoore = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s + o))
-        countMoore :: Moore (,) Int (->) (Mono () Int)
-        countMoore = fromEvalMoore $ \s -> EP (EK s, EE (\() -> s + 1))
-    assert "K1 asProcess . asPProcess agrees with iterateDiag (sum)" $
-      scan (asProcess (asPProcess sumMoore (Cell 0))) [1, 2, 3, 4] == iterateDiag sumMoore 0 [1, 2, 3, 4]
-    assert "K1 asProcess . asPProcess agrees with iterateDiag (count)" $
-      scan (asProcess (asPProcess countMoore (Cell 0))) [(), (), ()] == iterateDiag countMoore 0 [(), (), ()]
+    let sumMachineP :: MachineP (,) Int (->) (Mono Int Int)
+        sumMachineP = fromEvalMachineP $ \s -> EP (EK s, EE (\o -> s + o))
+        countMachineP :: MachineP (,) Int (->) (Mono () Int)
+        countMachineP = fromEvalMachineP $ \s -> EP (EK s, EE (\() -> s + 1))
+    assert "K1 asProcess . asProcessP agrees with iterateDiag (sum)" $
+      scan (asProcess (asProcessP sumMachineP 0)) [1, 2, 3, 4] == iterateDiag sumMachineP 0 [1, 2, 3, 4]
+    assert "K1 asProcess . asProcessP agrees with iterateDiag (count)" $
+      scan (asProcess (asProcessP countMachineP 0)) [(), (), ()] == iterateDiag countMachineP 0 [(), (), ()]
 
   do
-    -- K3 · Moore-ness: the output component factors through the carrier alone.
+    -- K3 · MachineP-ness: the output component factors through the carrier alone.
     --
-    -- For a Moore machine over a monomial interface, the current output must not
+    -- For a MachineP machine over a monomial interface, the current output must not
     -- depend on the current input direction.
-    let sys :: Moore (,) Int (->) (Mono Int Int)
-        sys = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s + o))
-        f = mooreMorphism sys
+    let sys :: MachineP (,) Int (->) (Mono Int Int)
+        sys = fromEvalMachineP $ \s -> EP (EK s, EE (\o -> s + o))
+        f = machineMorphismP sys
         (_, pos1) = f (5, Right 10)
         (_, pos2) = f (5, Right 20)
         (_, pos3) = f (7, Right 10)
@@ -850,10 +849,10 @@ main = do
       abs (dp1 - dp1') < 1e-10 && abs (dp2 - dp2') < 1e-10
 
   do
-    let sumMoore :: Moore (,) Int (->) (Mono Int Int)
-        sumMoore = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s + o))
-    assert "duplicateMoore sum" $
-      case toEvalMoore (duplicateMoore sumMoore) 0 of
+    let sumMachineP :: MachineP (,) Int (->) (Mono Int Int)
+        sumMachineP = fromEvalMachineP $ \s -> EP (EK s, EE (\o -> s + o))
+    assert "duplicateMachineP sum" $
+      case toEvalMachineP (duplicateMachineP sumMachineP) 0 of
         EC ((s, ()), hang) k ->
           s == 0
             && hang (Right 1) == (1, ())
@@ -862,17 +861,17 @@ main = do
             && k (Right 10, Right 20) == 30
 
   do
-    let sumMoore :: Moore (,) Int (->) (Mono Int Int)
-        sumMoore = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s + o))
+    let sumMachineP :: MachineP (,) Int (->) (Mono Int Int)
+        sumMachineP = fromEvalMachineP $ \s -> EP (EK s, EE (\o -> s + o))
 
-        -- Feed one input through duplicateMoore.
+        -- Feed one input through duplicateMachineP.
         feed2 sys s (o1, o2) =
-          case toEvalMoore (duplicateMoore sys) s of
+          case toEvalMachineP (duplicateMachineP sys) s of
             EC _ k -> k (Right o1, Right o2)
 
         -- Left-grouped three inputs: duplicate the right factor.
         feed3L sys s (o1, (o2, o3)) =
-          case toEvalMoore (duplicateMoore sys) s of
+          case toEvalMachineP (duplicateMachineP sys) s of
             EC ((_, ()), hang) _ ->
               let s1 = fst (hang (Right o1))
                in feed2 sys s1 (o2, o3)
@@ -882,58 +881,57 @@ main = do
           let s2 = feed2 sys s (o1, o2)
            in snd (runMono sys s2) o3
 
-    assert "duplicateMoore coassociativity" $
-      feed3L sumMoore 0 (1, (2, 3)) == 6
-        && feed3R sumMoore 0 ((1, 2), 3) == 6
-        && feed3L sumMoore 5 (10, (20, 30)) == feed3R sumMoore 5 ((10, 20), 30)
+    assert "duplicateMachineP coassociativity" $
+      feed3L sumMachineP 0 (1, (2, 3)) == 6
+        && feed3R sumMachineP 0 ((1, 2), 3) == 6
+        && feed3L sumMachineP 5 (10, (20, 30)) == feed3R sumMachineP 5 ((10, 20), 30)
 
   do
-    -- Counit law: extracting the inner position from duplicateMoore recovers
+    -- Counit law: extracting the inner position from duplicateMachineP recovers
     -- the original step function. This is the comonad counit for systems where
     -- the output position is the state.
-    let countMoore :: Moore (,) Int (->) (Mono () Int)
-        countMoore = fromEvalMoore $ \s -> EP (EK s, EE (\() -> s + 1))
-    assert "duplicateMoore counit (count)" $
-      case toEvalMoore (duplicateMoore countMoore) 0 of
+    let countMachineP :: MachineP (,) Int (->) (Mono () Int)
+        countMachineP = fromEvalMachineP $ \s -> EP (EK s, EE (\() -> s + 1))
+    assert "duplicateMachineP counit (count)" $
+      case toEvalMachineP (duplicateMachineP countMachineP) 0 of
         EC ((s, ()), hang) k ->
           s == 0
             && hang (Right ()) == (1, ())
             && k (Right (), Right ()) == 2
 
   ----------------------------------------------------------------------
-  -- S1: coalgebra = lens (Moore (,) s p ≅ Poly(S y^S, p))
+  -- S1: coalgebra = lens (MachineP (,) s p ≅ Poly(S y^S, p))
   ----------------------------------------------------------------------
   do
-    let sys :: Moore (,) Int (->) (Mono Int Int)
-        sys = fromEvalMoore $ \s -> EP (EK (s * 2), EE (\i -> s + i))
-        pp = asPProcess sys (Cell 0)
+    let sys :: MachineP (,) Int (->) (Mono Int Int)
+        sys = fromEvalMachineP $ \s -> EP (EK (s * 2), EE (\i -> s + i))
+        pp = asProcessP sys 0
         -- Round-trip preserves the (output, transition) view at every state.
         roundTripOk s =
-          let cellS = Cell s
-              pp' = lensAsPProcess (pprocessAsLens pp) cellS
-           in pprocessExtract pp s == pprocessExtract pp' s
-                && all (\i -> pprocessStep pp s i == pprocessStep pp' s i) [-5 .. 5]
-    assert "S1: lensAsPProcess . pprocessAsLens round-trips" $
+          let pp' = lensAsProcessP (processAsLensP pp) s
+           in processExtractP pp s == processExtractP pp' s
+                && all (\i -> processStepP pp s i == processStepP pp' s i) [-5 .. 5]
+    assert "S1: lensAsProcessP . processAsLensP round-trips" $
       all roundTripOk [0 .. 5]
 
     -- The other direction of the iso: build a lens directly, round-trip
     -- through a pointed process, and compare on positions and directions.
     let m :: Morphism (Mono Int Int) (Mono Int Int)
         m = lens (\s -> s * 2) (\s i -> s + i)
-        m' = pprocessAsLens (lensAsPProcess m (Cell 0))
+        m' = processAsLensP (lensAsProcessP m 0)
         roundTripLensOk s =
           let (o, put) = applyLens m s
               (o', put') = applyLens m' s
            in o == o' && all (\i -> put i == put' i) [-5 .. 5]
-    assert "S1: pprocessAsLens . lensAsPProcess round-trips" $
+    assert "S1: processAsLensP . lensAsProcessP round-trips" $
       all roundTripLensOk [0 .. 5]
 
   ----------------------------------------------------------------------
   -- S2: comonoid = category concretely
   ----------------------------------------------------------------------
   do
-    let sys :: Moore (,) Int (->) (Mono Int Int)
-        sys = fromEvalMoore $ \s -> EP (EK s, EE (\i -> s + i))
+    let sys :: MachineP (,) Int (->) (Mono Int Int)
+        sys = fromEvalMachineP $ \s -> EP (EK s, EE (\i -> s + i))
         s0 = 0
         xs = [1, 2, 3] :: [Int]
         ys = [4, 5] :: [Int]
@@ -952,13 +950,13 @@ main = do
     -- A Coalgebra s 'Y q avoids the flat Dir q family by using Eval q s as
     -- the step type: Eval is the GADT that pairs each position with its own
     -- direction consumer. Here q is monomial for simplicity.
-    let sys :: Moore (,) Int (->) (Mono Int Int)
-        sys = fromEvalMoore $ \s -> EP (EK (s * 2), EE (\i -> s + i))
+    let sys :: MachineP (,) Int (->) (Mono Int Int)
+        sys = fromEvalMachineP $ \s -> EP (EK (s * 2), EE (\i -> s + i))
         coal :: Coalgebra Int 'Y (Mono Int Int)
-        coal = mooreToCoalgebraMono sys
+        coal = machinePToCoalgebraMono sys
         sys' = coalgebraToMoore coal
     -- Round-trip through Coalgebra and back.
-    assert "Coalgebra bridge: mooreToCoalgebraMono . coalgebraToMoore round-trips" $
+    assert "Coalgebra bridge: machinePToCoalgebraMono . coalgebraToMoore round-trips" $
       iterateDiag sys' 0 [1, 2, 3] == iterateDiag sys 0 [1, 2, 3]
     -- act and upd agree on positions; act is the static wiring pattern and
     -- upd is the full dynamics, so we compare output positions only.
@@ -987,7 +985,7 @@ main = do
   ----------------------------------------------------------------------
   do
     -- Three closed coalgebras with monomial interfaces. Each is a simple
-    -- Moore machine: output depends on state, next state depends on input.
+    -- MachineP machine: output depends on state, next state depends on input.
     let cA :: Coalgebra Int 'Y (Mono Int Int)
         cA =
           Coalgebra
@@ -1010,13 +1008,13 @@ main = do
         -- Helpers to run a nested composition product of three monomials and
         -- collect the (o1, o2, o3) output triples plus the final state.
         runNested ::
-          Moore (,) s (->) (Comp (Mono Int Int) (Comp (Mono Int Int) (Mono Int Int))) ->
+          MachineP (,) s (->) (Comp (Mono Int Int) (Comp (Mono Int Int) (Mono Int Int))) ->
           s ->
           [(Int, Int, Int)] ->
           [(Int, Int, Int, s)]
         runNested _ _ [] = []
         runNested sys s ((i1, i2, i3) : is) =
-          case toEvalMoore sys s of
+          case toEvalMachineP sys s of
             EC ((o1, ()), hangOuter) k ->
               let ((o2, ()), hangInner) = hangOuter (Right i1)
                   (o3, ()) = hangInner (Right i2)
@@ -1024,13 +1022,13 @@ main = do
                in (o1, o2, o3, s') : runNested sys s' is
 
         runLeftNested ::
-          Moore (,) s (->) (Comp (Comp (Mono Int Int) (Mono Int Int)) (Mono Int Int)) ->
+          MachineP (,) s (->) (Comp (Comp (Mono Int Int) (Mono Int Int)) (Mono Int Int)) ->
           s ->
           [(Int, Int, Int)] ->
           [(Int, Int, Int, s)]
         runLeftNested _ _ [] = []
         runLeftNested sys s ((i1, i2, i3) : is) =
-          case toEvalMoore sys s of
+          case toEvalMachineP sys s of
             EC (((o1, ()), hangPQ), hangR) k ->
               let (o2, ()) = hangPQ (Right i1)
                   (o3, ()) = hangR (Right i1, Right i2)
@@ -1043,11 +1041,11 @@ main = do
         leftSys =
           coalgebraToMoore
             (composeCoalgebra (composeCoalgebra cA cB) cC) ::
-            Moore (,) ((Int, Int), Int) (->) (Comp (Comp (Mono Int Int) (Mono Int Int)) (Mono Int Int))
+            MachineP (,) ((Int, Int), Int) (->) (Comp (Comp (Mono Int Int) (Mono Int Int)) (Mono Int Int))
         rightSys =
           coalgebraToMoore
             (composeCoalgebra cA (composeCoalgebra cB cC)) ::
-            Moore (,) (Int, (Int, Int)) (->) (Comp (Mono Int Int) (Comp (Mono Int Int) (Mono Int Int)))
+            MachineP (,) (Int, (Int, Int)) (->) (Comp (Mono Int Int) (Comp (Mono Int Int) (Mono Int Int)))
 
         inputs = [(1, 2, 3), (4, 5, 6), (7, 8, 9)] :: [(Int, Int, Int)]
         leftResults = runLeftNested leftSys ((0, 10), 20) inputs
@@ -1070,34 +1068,34 @@ main = do
   -- Phase 6: Sum-interface agent (stage 3a headline)
   ----------------------------------------------------------------------
   do
-    let sumSys :: Moore (,) Int (->) (Mono Int Int)
-        sumSys = fromEvalMoore $ \s -> EP (EK s, EE (\n -> s + n))
-        doubleSys :: Moore (,) Int (->) (Mono Int Int)
-        doubleSys = fromEvalMoore $ \s -> EP (EK (s * 2), EE (\o -> s * 2 + o))
-        branchSys :: Moore (,) Int (->) ('Sum (Mono Int Int) (Mono Int Int))
-        branchSys = branchMoore even sumSys doubleSys
-        (out0, step0) = runMooreSum branchSys 0
+    let sumSys :: MachineP (,) Int (->) (Mono Int Int)
+        sumSys = fromEvalMachineP $ \s -> EP (EK s, EE (\n -> s + n))
+        doubleSys :: MachineP (,) Int (->) (Mono Int Int)
+        doubleSys = fromEvalMachineP $ \s -> EP (EK (s * 2), EE (\o -> s * 2 + o))
+        branchSys :: MachineP (,) Int (->) ('Sum (Mono Int Int) (Mono Int Int))
+        branchSys = branchMachineP even sumSys doubleSys
+        (out0, step0) = runMachinePSum branchSys 0
         s1 = step0 5
-        (out1, step1) = runMooreSum branchSys s1
+        (out1, step1) = runMachinePSum branchSys s1
         s2 = step1 3
-    assert "branchMoore selects left branch on even state" $
+    assert "branchMachineP selects left branch on even state" $
       out0 == Left 0 && s1 == 5
-    assert "branchMoore selects right branch on odd state" $
+    assert "branchMachineP selects right branch on odd state" $
       out1 == Right 10 && s2 == 13
 
   do
     -- Round-trip: running a Sum-interface system recovers the underlying
     -- monomial behaviours branch-for-branch.
-    let incSys :: Moore (,) Int (->) (Mono Int Int)
-        incSys = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s + o))
-        decSys :: Moore (,) Int (->) (Mono Int Int)
-        decSys = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s - o))
-        branchSys = branchMoore (\s -> s >= 0) incSys decSys
-        (outNeg, stepNeg) = runMooreSum branchSys (-1)
-        (outPos, stepPos) = runMooreSum branchSys 2
-    assert "branchMoore round-trip negative state" $
+    let incSys :: MachineP (,) Int (->) (Mono Int Int)
+        incSys = fromEvalMachineP $ \s -> EP (EK s, EE (\o -> s + o))
+        decSys :: MachineP (,) Int (->) (Mono Int Int)
+        decSys = fromEvalMachineP $ \s -> EP (EK s, EE (\o -> s - o))
+        branchSys = branchMachineP (\s -> s >= 0) incSys decSys
+        (outNeg, stepNeg) = runMachinePSum branchSys (-1)
+        (outPos, stepPos) = runMachinePSum branchSys 2
+    assert "branchMachineP round-trip negative state" $
       outNeg == Right (-1) && stepNeg 2 == -3
-    assert "branchMoore round-trip positive state" $
+    assert "branchMachineP round-trip positive state" $
       outPos == Left 2 && stepPos 4 == 6
 
   do
@@ -1105,38 +1103,38 @@ main = do
     -- types, so the runner uses a GADT to make the position-dependency total.
     -- This is the real stage-3a headline: interface-level choice with a
     -- position-dependent input type, no error, no 'Dir' row needed.
-    let sumSys :: Moore (,) Int (->) (Mono Int Int)
-        sumSys = fromEvalMoore $ \s -> EP (EK s, EE (\n -> s + n))
-        countSys :: Moore (,) Int (->) (Mono () Int)
-        countSys = fromEvalMoore $ \s -> EP (EK s, EE (\() -> s + 1))
-        branchSys :: Moore (,) Int (->) ('Sum (Mono Int Int) (Mono () Int))
-        branchSys = branchMooreHet even sumSys countSys
-        s1 = case runMooreSumHet branchSys 0 of
+    let sumSys :: MachineP (,) Int (->) (Mono Int Int)
+        sumSys = fromEvalMachineP $ \s -> EP (EK s, EE (\n -> s + n))
+        countSys :: MachineP (,) Int (->) (Mono () Int)
+        countSys = fromEvalMachineP $ \s -> EP (EK s, EE (\() -> s + 1))
+        branchSys :: MachineP (,) Int (->) ('Sum (Mono Int Int) (Mono () Int))
+        branchSys = branchMachinePHet even sumSys countSys
+        s1 = case runMachinePSumHet branchSys 0 of
           SumStepL _ f -> f 5
           SumStepR _ _ -> error "expected left branch"
-        (o, s2) = case runMooreSumHet branchSys s1 of
+        (o, s2) = case runMachinePSumHet branchSys s1 of
           SumStepR o' f -> (o', f ())
           SumStepL _ _ -> error "expected right branch"
-    assert "branchMooreHet left branch consumes Int" $ s1 == 5
-    assert "branchMooreHet right branch consumes ()" $ o == 5 && s2 == 6
+    assert "branchMachinePHet left branch consumes Int" $ s1 == 5
+    assert "branchMachinePHet right branch consumes ()" $ o == 5 && s2 == 6
 
   do
     -- S4 · mode-dependence: position is determined by the carrier; the
     -- direction type is determined by the presented position.
-    let sumSys :: Moore (,) Int (->) (Mono Int Int)
-        sumSys = fromEvalMoore $ \s -> EP (EK s, EE (\n -> s + n))
-        countSys :: Moore (,) Int (->) (Mono () Int)
-        countSys = fromEvalMoore $ \s -> EP (EK s, EE (\() -> s + 1))
-        branchSys :: Moore (,) Int (->) ('Sum (Mono Int Int) (Mono () Int))
-        branchSys = branchMooreHet even sumSys countSys
+    let sumSys :: MachineP (,) Int (->) (Mono Int Int)
+        sumSys = fromEvalMachineP $ \s -> EP (EK s, EE (\n -> s + n))
+        countSys :: MachineP (,) Int (->) (Mono () Int)
+        countSys = fromEvalMachineP $ \s -> EP (EK s, EE (\() -> s + 1))
+        branchSys :: MachineP (,) Int (->) ('Sum (Mono Int Int) (Mono () Int))
+        branchSys = branchMachinePHet even sumSys countSys
         -- (a) the presented position is a function of the carrier alone.
-        branchOf s = case runMooreSumHet branchSys s of
+        branchOf s = case runMachinePSumHet branchSys s of
           SumStepL {} -> True
           SumStepR {} -> False
         -- (b) each branch wires to its own transition; the GADT makes the
         -- position-dependent dispatcher total at compile time, while the
         -- assertion checks the runtime wiring (left adds 10, right adds 1).
-        stepModeDependent s = case runMooreSumHet branchSys s of
+        stepModeDependent s = case runMachinePSumHet branchSys s of
           SumStepL _ f -> f 10
           SumStepR _ f -> f ()
         states = [-2 .. 2 :: Int]
@@ -1211,7 +1209,7 @@ main = do
     -- bogus gradient.  With p = 2 the primal still converges at the seed,
     -- but the feedback Jacobian is J = 2, outside the star regime.
     let nonContractiveClosed :: DiffP Double Double Double
-        nonContractiveClosed = monoPost . traceDiffPD 0.0 1e-12 50 (mooreMorphismArr (diffPMono g4Step)) . monoPre
+        nonContractiveClosed = monoPost . traceDiffPD 0.0 1e-12 50 (machineMorphismPArr (diffPMono g4Step)) . monoPre
     assertError "T3 rejects |J| >= 1" (fst (runDiffP nonContractiveClosed 2.0 0.0))
 
   ----------------------------------------------------------------------
