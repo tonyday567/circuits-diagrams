@@ -18,6 +18,7 @@ import Circuit.Diagram.Hyper
     normalise,
   )
 import Circuit.Diff.Param (DiffP (..), splitP)
+import Circuit.Equip (Cell (..))
 import Circuit.Moore
   ( Coalgebra (..),
     Moore,
@@ -120,10 +121,10 @@ assertError msg action = do
 
 -- | Replacements for the removed Moore runners.
 iterateDiag :: Moore (,) s (->) (Mono i o) -> s -> [i] -> [o]
-iterateDiag sys s0 = scanPProcess (asPProcess sys s0)
+iterateDiag sys s0 = scanPProcess (asPProcess sys (Cell s0))
 
 finalDiag :: Moore (,) s (->) (Mono i o) -> s -> [i] -> s
-finalDiag sys s0 = finalPProcess (asPProcess sys s0)
+finalDiag sys s0 = finalPProcess (asPProcess sys (Cell s0))
 
 runMono :: Moore (,) s (->) (Mono i o) -> s -> (o, i -> s)
 runMono sys s = case toEvalMoore sys s of EP (EK o, EE f) -> (o, f)
@@ -763,13 +764,13 @@ main = do
   do
     let sumMoore :: Moore (,) Int (->) (Mono Int Int)
         sumMoore = fromEvalMoore $ \s -> EP (EK s, EE (\o -> s + o))
-        sumProcess = asProcess (asPProcess sumMoore 0)
+        sumProcess = asProcess (asPProcess sumMoore (Cell 0))
     assert "asProcess . asPProcess sum" $ scan sumProcess [1, 2, 3, 4] == [1, 3, 6, 10]
 
   do
     let countMoore :: Moore (,) Int (->) (Mono () Int)
         countMoore = fromEvalMoore $ \s -> EP (EK s, EE (\() -> s + 1))
-        countProcess = asProcess (asPProcess countMoore 0)
+        countProcess = asProcess (asPProcess countMoore (Cell 0))
     assert "asProcess . asPProcess count" $ scan countProcess [(), (), ()] == [1, 2, 3]
 
   do
@@ -792,9 +793,9 @@ main = do
         countMoore :: Moore (,) Int (->) (Mono () Int)
         countMoore = fromEvalMoore $ \s -> EP (EK s, EE (\() -> s + 1))
     assert "K1 asProcess . asPProcess agrees with iterateDiag (sum)" $
-      scan (asProcess (asPProcess sumMoore 0)) [1, 2, 3, 4] == iterateDiag sumMoore 0 [1, 2, 3, 4]
+      scan (asProcess (asPProcess sumMoore (Cell 0))) [1, 2, 3, 4] == iterateDiag sumMoore 0 [1, 2, 3, 4]
     assert "K1 asProcess . asPProcess agrees with iterateDiag (count)" $
-      scan (asProcess (asPProcess countMoore 0)) [(), (), ()] == iterateDiag countMoore 0 [(), (), ()]
+      scan (asProcess (asPProcess countMoore (Cell 0))) [(), (), ()] == iterateDiag countMoore 0 [(), (), ()]
 
   do
     -- K3 · Moore-ness: the output component factors through the carrier alone.
@@ -905,10 +906,11 @@ main = do
   do
     let sys :: Moore (,) Int (->) (Mono Int Int)
         sys = fromEvalMoore $ \s -> EP (EK (s * 2), EE (\i -> s + i))
-        pp = asPProcess sys 0
+        pp = asPProcess sys (Cell 0)
         -- Round-trip preserves the (output, transition) view at every state.
         roundTripOk s =
-          let pp' = lensAsPProcess (pprocessAsLens pp) s
+          let cellS = Cell s
+              pp' = lensAsPProcess (pprocessAsLens pp) cellS
            in pprocessExtract pp s == pprocessExtract pp' s
                 && all (\i -> pprocessStep pp s i == pprocessStep pp' s i) [-5 .. 5]
     assert "S1: lensAsPProcess . pprocessAsLens round-trips" $
@@ -918,7 +920,7 @@ main = do
     -- through a pointed process, and compare on positions and directions.
     let m :: Morphism (Mono Int Int) (Mono Int Int)
         m = lens (\s -> s * 2) (\s i -> s + i)
-        m' = pprocessAsLens (lensAsPProcess m 0)
+        m' = pprocessAsLens (lensAsPProcess m (Cell 0))
         roundTripLensOk s =
           let (o, put) = applyLens m s
               (o', put') = applyLens m' s
