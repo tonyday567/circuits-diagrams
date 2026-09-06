@@ -991,7 +991,7 @@ main = do
         sys' = coalgebraToMachine coal
     -- Round-trip through Coalgebra and back.
     assert "Coalgebra bridge: machineToCoalgebraMono . coalgebraToMachine round-trips" $
-      iterateDiag (machineObsWith (\s -> (s * 2, ())) sys') 0 [1, 2, 3] == iterateDiag sys 0 [1, 2, 3]
+      iterateDiag sys' 0 [1, 2, 3] == iterateDiag sys 0 [1, 2, 3]
     -- act and upd agree on positions; act is the static wiring pattern and
     -- upd is the full dynamics, so we compare output positions only.
     let eval1 = upd coal 0 (EY (0 :: Int))
@@ -1012,7 +1012,7 @@ main = do
             }
         sys = coalgebraToMachine coal
     assert "Coalgebra Y -> Mono runs as System" $
-      iterateDiag (machineObsWith (\s -> (s * 2, ())) sys) 0 [1, 2, 3] == [2, 6, 12]
+      iterateDiag sys 0 [1, 2, 3] == [2, 6, 12]
 
   ----------------------------------------------------------------------
   -- O4: coalgebra composition is associative
@@ -1076,14 +1076,14 @@ main = do
         coalR = composeCoalgebra cA (composeCoalgebra cB cC)
         leftSys =
           coalgebraToMachine coalL ::
-            Machine (,) ((Int, Int), Int) (->) (Comp (Comp (Mono Int Int) (Mono Int Int)) (Mono Int Int))
+            MachineObs ((Int, Int), Int) (Comp (Comp (Mono Int Int) (Mono Int Int)) (Mono Int Int))
         rightSys =
           coalgebraToMachine coalR ::
-            Machine (,) (Int, (Int, Int)) (->) (Comp (Mono Int Int) (Comp (Mono Int Int) (Mono Int Int)))
+            MachineObs (Int, (Int, Int)) (Comp (Mono Int Int) (Comp (Mono Int Int) (Mono Int Int)))
 
         inputs = [(1, 2, 3), (4, 5, 6), (7, 8, 9)] :: [(Int, Int, Int)]
-        leftResults = runLeftNested (obsOfCoal coalL leftSys) ((0, 10), 20) inputs
-        rightResults = runNested (obsOfCoal coalR rightSys) (0, (10, 20)) inputs
+        leftResults = runLeftNested leftSys ((0, 10), 20) inputs
+        rightResults = runNested rightSys (0, (10, 20)) inputs
 
         -- Outputs must coincide, and the carried states must correspond under
         -- the associator.
@@ -1107,7 +1107,7 @@ main = do
         doubleSys :: MachineObs Int (Mono Int Int)
         doubleSys = machineObs $ \s -> EP (EK (s * 2), EE (\o -> s * 2 + o))
         branchSys :: Machine (,) Int (->) ('Sum (Mono Int Int) (Mono Int Int))
-        branchSys = branchMachine even sumSys doubleSys
+        branchSys = moMachine (branchMachine even sumSys doubleSys)
         (out0, step0) = runMachineSum (certifyBranch even sumSys doubleSys branchSys) 0
         s1 = step0 5
         (out1, step1) = runMachineSum (certifyBranch even sumSys doubleSys branchSys) s1
@@ -1124,7 +1124,7 @@ main = do
         incSys = machineObs $ \s -> EP (EK s, EE (\o -> s + o))
         decSys :: MachineObs Int (Mono Int Int)
         decSys = machineObs $ \s -> EP (EK s, EE (\o -> s - o))
-        branchSys = branchMachine (\s -> s >= 0) incSys decSys
+        branchSys = moMachine (branchMachine (\s -> s >= 0) incSys decSys)
         (outNeg, stepNeg) = runMachineSum (certifyBranch (\s -> s >= 0) incSys decSys branchSys) (-1)
         (outPos, stepPos) = runMachineSum (certifyBranch (\s -> s >= 0) incSys decSys branchSys) 2
     assert "branchMachine round-trip negative state" $
@@ -1142,7 +1142,7 @@ main = do
         countSys :: MachineObs Int (Mono () Int)
         countSys = machineObs $ \s -> EP (EK s, EE (\() -> s + 1))
         branchSys :: Machine (,) Int (->) ('Sum (Mono Int Int) (Mono () Int))
-        branchSys = branchMachineHet even sumSys countSys
+        branchSys = moMachine (branchMachineHet even sumSys countSys)
         branchObs = certifyBranchHet even sumSys countSys branchSys
         s1 = case runMachineSumHet branchObs 0 of
           SumStepL _ f -> f 5
@@ -1161,7 +1161,7 @@ main = do
         countSys :: MachineObs Int (Mono () Int)
         countSys = machineObs $ \s -> EP (EK s, EE (\() -> s + 1))
         branchSys :: Machine (,) Int (->) ('Sum (Mono Int Int) (Mono () Int))
-        branchSys = branchMachineHet even sumSys countSys
+        branchSys = moMachine (branchMachineHet even sumSys countSys)
         branchObs = certifyBranchHet even sumSys countSys branchSys
         -- (a) the presented position is a function of the carrier alone.
         branchOf s = case runMachineSumHet branchObs s of
