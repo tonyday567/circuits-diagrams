@@ -68,7 +68,8 @@ import Circuit.Poly.Int (IN, IntMorph (..))
 import Circuit.Poly.Int qualified as Int
 import Circuit.Syntax (eval)
 import Circuit.Tensor qualified as M
-import Circuit.Trace (Trace, base)
+import Circuit.Syntax (Syntax (Lift))
+import Circuit.Trace (Trace)
 import Circuit.Traced (Yank (..))
 import Prelude hiding (id, (.))
 
@@ -144,11 +145,11 @@ skeleton (Diagram d) = go d
 -- | Convert a deep-embedding diagram back to the executable Int corridor.
 toIntMorph :: Diagram a da b db -> IntMorph (,) (Trace (,) (->)) a da b db
 toIntMorph (Diagram d) = case d of
-  Wire_ -> IntMorph (base M.braid)
-  Box_ _ m -> IntMorph (base (\(a, db) -> let (b, put) = applyLens m a in (put db, b)))
+  Wire_ -> IntMorph (Lift M.braid)
+  Box_ _ m -> IntMorph (Lift (\(a, db) -> let (b, put) = applyLens m a in (put db, b)))
   PrismBox_ match build ->
     IntMorph
-      ( base
+      ( Lift
           ( \(s, e) -> case e of
               Left a -> (build a, match s)
               Right s' -> (s', match s)
@@ -156,16 +157,16 @@ toIntMorph (Diagram d) = case d of
       )
   Beside_ f g -> Int.intTensor (toIntMorph (Diagram f)) (toIntMorph (Diagram g))
   ThenD_ f g -> Int.comp (toIntMorph (Diagram g)) (toIntMorph (Diagram f))
-  Bend_ -> IntMorph (base (\((da, a), ()) -> ((a, da), ())))
-  Bend'_ -> IntMorph (base (\((), (da, a)) -> ((), (a, da))))
+  Bend_ -> IntMorph (Lift (\((da, a), ()) -> ((a, da), ())))
+  Bend'_ -> IntMorph (Lift (\((), (da, a)) -> ((), (a, da))))
   Turn_ f -> turnInt (toIntMorph (Diagram f))
-  UnitL_ -> IntMorph (base (runIntMorph Int.unitL))
-  UnitL'_ -> IntMorph (base (runIntMorph Int.unitL'))
-  UnitR_ -> IntMorph (base (runIntMorph Int.unitR))
-  UnitR'_ -> IntMorph (base (runIntMorph Int.unitR'))
-  Assoc_ -> IntMorph (base (runIntMorph Int.tensorAssoc))
-  Assoc'_ -> IntMorph (base (runIntMorph Int.tensorAssoc'))
-  Swap_ -> IntMorph (base (runIntMorph Int.intBraid))
+  UnitL_ -> IntMorph (Lift (runIntMorph Int.unitL))
+  UnitL'_ -> IntMorph (Lift (runIntMorph Int.unitL'))
+  UnitR_ -> IntMorph (Lift (runIntMorph Int.unitR))
+  UnitR'_ -> IntMorph (Lift (runIntMorph Int.unitR'))
+  Assoc_ -> IntMorph (Lift (runIntMorph Int.tensorAssoc))
+  Assoc'_ -> IntMorph (Lift (runIntMorph Int.tensorAssoc'))
+  Swap_ -> IntMorph (Lift (runIntMorph Int.intBraid))
   Trace_ f -> traceIntMorph (toIntMorph (Diagram f))
   where
     traceIntMorph ::
@@ -174,9 +175,9 @@ toIntMorph (Diagram d) = case d of
     traceIntMorph (IntMorph body) =
       IntMorph
         ( yank
-            ( base (\((s1, s2), (da, b)) -> ((s1, da), (s2, b)))
+            (Lift (\((s1, s2), (da, b)) -> ((s1, da), (s2, b)))
                 Cat.. body
-                Cat.. base (\((s1, s2), (a, db)) -> ((s1, a), (s2, db)))
+                Cat.. Lift (\((s1, s2), (a, db)) -> ((s1, a), (s2, db)))
             )
         )
 
@@ -310,4 +311,4 @@ runDiagram d = eval (runIntMorph (toIntMorph d))
 turnInt ::
   IntMorph (,) (Trace (,) (->)) a da b db ->
   IntMorph (,) (Trace (,) (->)) db b da a
-turnInt (IntMorph f) = IntMorph (base M.braid Cat.. f Cat.. base M.braid)
+turnInt (IntMorph f) = IntMorph (Lift M.braid Cat.. f Cat.. Lift M.braid)

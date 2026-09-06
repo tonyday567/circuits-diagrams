@@ -52,7 +52,8 @@ import Circuit.Category qualified as Cat (Category (..))
 import Circuit.Poly (Mono, Morphism (Compose), applyLens, lens)
 import Circuit.Syntax (Syntax (..), eval, (:+:) (..))
 import Circuit.Tensor qualified as M (Action (..), Tensor (..))
-import Circuit.Trace (SigYank (..), Trace, base)
+import Circuit.Syntax (Syntax (Lift))
+import Circuit.Trace (SigYank (..), Trace)
 import Circuit.Traced (Assoc (..), Slide (..), Yank (..), yank)
 import Data.Kind (Type)
 import Prelude hiding (id, (.))
@@ -61,7 +62,8 @@ import Prelude hiding (id, (.))
 -- >>> import Prelude hiding (id, (.))
 -- >>> import Circuit.Category ((.))
 -- >>> import Circuit.Category qualified as Cat
--- >>> import Circuit.Trace (Trace, SigYank (..), base)
+-- >>> import Circuit.Syntax (Syntax (Lift))
+-- >>> import Circuit.Trace (Trace, SigYank (..))
 -- >>> import Circuit.Syntax (Syntax (..), (:+:) (..), eval)
 -- >>> import Circuit.Traced (Assoc (..), Slide (..), Yank (..), yank)
 -- >>> import Circuit.Tensor (Action (..), Tensor (..))
@@ -217,8 +219,8 @@ dual (IntMorph f) = IntMorph (M.braid . f . M.braid)
 -- are lazy in the feedback component so the lazy @(,)@ knot stays productive.
 -- Hand-computed: input @(4, 1)@ gives output @(5, 2)@.
 --
--- >>> let f = IntMorph (base (\(a, _) -> (a + 1, a))) :: IntMorph (,) (Trace (,) (->)) Int Int Int Int
--- >>> let g = IntMorph (base (\(_, c) -> (c, c + 1))) :: IntMorph (,) (Trace (,) (->)) Int Int Int Int
+-- >>> let f = IntMorph (Lift (\(a, _) -> (a + 1, a))) :: IntMorph (,) (Trace (,) (->)) Int Int Int Int
+-- >>> let g = IntMorph (Lift (\(_, c) -> (c, c + 1))) :: IntMorph (,) (Trace (,) (->)) Int Int Int Int
 -- >>> eval (runIntMorph (g `comp` f)) (4, 1)
 -- (5,2)
 --
@@ -432,7 +434,7 @@ intBraid = IntMorph $ \ ~((x, y), (dy, dx)) -> ((dx, dy), (y, x))
 -- swap, because the causal fragment feeds nothing back through the loop. The knot
 -- is tied and does nothing: pullback magnitude of the trace is zero here.
 --
--- >>> let cz (m :: Morphism (Mono xd x) (Mono yd y)) = IntMorph (base (\(a, db) -> let (b, put) = applyLens m a in (put db, b))) :: IntMorph (,) (Trace (,) (->)) x xd y yd
+-- >>> let cz (m :: Morphism (Mono xd x) (Mono yd y)) = IntMorph (Lift (\(a, db) -> let (b, put) = applyLens m a in (put db, b))) :: IntMorph (,) (Trace (,) (->)) x xd y yd
 -- >>> let f = dagger (+1) (*2) :: Morphism (Mono Int Int) (Mono Int Int)
 -- >>> let g = dagger (*10) (+5) :: Morphism (Mono Int Int) (Mono Int Int)
 -- >>> let (b, put) = applyLens (Compose g f) 7 in (b, put 100)
