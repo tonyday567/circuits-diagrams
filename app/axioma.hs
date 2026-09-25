@@ -18,30 +18,13 @@ import Circuit.Diagram.Hyper
     normalise,
   )
 import Circuit.Diff.Param (DiffP (..), splitP)
-import Circuit.Machine
-  ( Coalgebra (..),
-    Machine (..),
-    MachineEval (..),
-    MachineObs,
-    SumStep (..),
-    branchMachine,
-    branchMachineHet,
-    coalgebraToMachine,
-    composeCoalgebra,
-    duplicateMachine,
-    fromEvalMachine,
-    machine,
-    machineMorphism,
-    machineObs,
-    machineObsWith,
-    machineToCoalgebraMono,
-    moObserve,
-    moMachine,
-    monoDir,
-    monoIn,
-    runMachineSum,
-    runMachineSumHet,
-    toEvalMachine,
+import Circuit.GMachine
+  ( Cell (..),
+    cellAsLens,
+    evalAsCell,
+    lensAsCell,
+    processFromSeed,
+    scanProcess,
   )
 import Circuit.Poly
 import Circuit.Poly qualified as Poly
@@ -97,7 +80,6 @@ import Circuit.Poly.StringDiagram
     unitR',
     wire,
   )
-import Circuit.Process (Process (..), asProcess, lensAsProcess, processAsLens, scanProcess)
 import Control.Exception (ErrorCall, evaluate, try)
 import Data.List (scanl')
 import Data.Maybe (isJust, isNothing)
@@ -123,44 +105,14 @@ assertError msg action = do
       putStrLn ("  FAIL " ++ msg)
       exitFailure
 
--- | Replacements for the removed Machine runners.
-iterateDiag :: MachineObs s (Mono i o) -> s -> [i] -> [o]
-iterateDiag sys s0 = scanProcess (asProcess sys s0)
+-- | Runners for cells over the monomial interface.
+iterateDiag :: Cell (,) s (->) i o -> s -> [i] -> [o]
+iterateDiag sys s0 = scanProcess (processFromSeed s0 sys)
 
-finalDiag :: MachineObs s (Mono i o) -> s -> [i] -> s
+finalDiag :: Cell (,) s (->) i o -> s -> [i] -> s
 finalDiag sys s0 is = foldl' step s0 is
   where
-    step s i = fst (machineMorphism (moMachine sys) (s, monoIn i))
-
-runMono :: MachineObs s (Mono i o) -> s -> (o, i -> s)
-runMono sys s = case toEvalMachine sys s of EP (EK o, EE f) -> (o, f)
-
--- | Certify the observation of a 'branchMachine' system from its branches.
-certifyBranch ::
-  (s -> Bool) ->
-  MachineObs s (Mono i o) ->
-  MachineObs s (Mono i o) ->
-  Machine (,) s (->) ('Sum (Mono i o) (Mono i o)) ->
-  MachineObs s ('Sum (Mono i o) (Mono i o))
-certifyBranch cond l r sys = machineObsWith (\s -> if cond s then Left (moObserve l s) else Right (moObserve r s)) sys
-
--- | Certify the observation of a 'coalgebraToMachine' system from its coalgebra.
-obsOfCoal ::
-  (MachineEval q) =>
-  Coalgebra s 'Y q ->
-  Machine (,) s (->) q ->
-  MachineObs s q
-obsOfCoal coal sys = machineObsWith (\s -> fst (evalToMachine (upd coal s (EY s)))) sys
-
--- | Heterogeneous variant of 'certifyBranch': the two branches have different
--- direction types, so the position sum is heterogenous too.
-certifyBranchHet ::
-  (s -> Bool) ->
-  MachineObs s (Mono i1 o1) ->
-  MachineObs s (Mono i2 o2) ->
-  Machine (,) s (->) ('Sum (Mono i1 o1) (Mono i2 o2)) ->
-  MachineObs s ('Sum (Mono i1 o1) (Mono i2 o2))
-certifyBranchHet cond l r sys = machineObsWith (\s -> if cond s then Left (moObserve l s) else Right (moObserve r s)) sys
+    step s i = absorb sys (s, i)
 
 approx :: Double -> Double -> Bool
 approx a b = abs (a - b) < 0.08
@@ -235,15 +187,11 @@ negLens = lens negate (\_ d -> negate d)
 -- | Monomial shape in the 'Span' grammar.
 type MonoC a da = 'CProd ('CConst a) ('CExp da)
 
--- | Extract the underlying arrow from a 'System'.
-machineMorphismArr :: Machine (,) s arr p -> arr (s, Dir p) (s, Pos p)
-machineMorphismArr = machineMorphism
-
--- | Embed a parameterised lens @(s, i) -> (s, o)@ as a 'System' over the
--- monomial @Mono i o@.  The state channel is preserved so the resulting
--- system can be traced.
-diffPMono :: DiffP p (s, i) (s, o) -> Machine (,) s (DiffP p) (Mono i o)
-diffPMono (DiffP f) = machine $ DiffP $ \p0 (s, d) ->
+-- | Embed a parameterised lens @(s, i) -> (s, o)@ as a monomial-typed step
+-- @DiffP p (s, Dir (Mono i o)) (s, Pos (Mono i o))@.  The state channel is
+-- preserved so the resulting step can be traced.
+diffPMono :: DiffP p (s, i) (s, o) -> DiffP p (s, Dir (Mono i o)) (s, Pos (Mono i o))
+diffPMono (DiffP f) = DiffP $ \p0 (s, d) ->
   let i = case d of Right x -> x; Left v -> absurd v
       ((s', o), back) = f p0 (s, i)
       back' (ds', (do', ())) =
@@ -274,7 +222,7 @@ g4Step = DiffP $ \p (s, i) ->
 
 -- | Closed G4b system via star trace.
 g4bClosed :: DiffP Double Double Double
-g4bClosed = monoPost . traceDiffPD 0.0 1e-12 200 (machineMorphismArr (diffPMono g4Step)) . monoPre
+g4bClosed = monoPost . traceDiffPD 0.0 1e-12 200 (diffPMono g4Step) . monoPre
 
 -- | Run a parameterised step over a finite prefix, returning the output trace
 -- and the parameter gradient accumulated from the supplied output cotangents.
@@ -791,56 +739,56 @@ main = do
         == (Left 8, Left 7)
 
   ----------------------------------------------------------------------
-  -- Phase 6: Machine (,) / Process bridge
+  -- Phase 6: Cell / Process bridge
   ----------------------------------------------------------------------
-  putStrLn "Phase 6: Machine (,) / Process bridge"
+  putStrLn "Phase 6: Cell / Process bridge"
   do
-    let sumMachineP :: MachineObs Int (Mono Int Int)
-        sumMachineP = machineObs $ \s -> EP (EK s, EE (\o -> s + o))
-        sumProcess = asProcess sumMachineP 0
-    assert "asProcess sum" $ scanProcess sumProcess [1, 2, 3, 4] == [1, 3, 6, 10]
+    let sumCell :: Cell (,) Int (->) Int Int
+        sumCell = evalAsCell $ \s -> EP (EK s, EE (\o -> s + o))
+        sumProcess = processFromSeed 0 sumCell
+    assert "processFromSeed sum" $ scanProcess sumProcess [1, 2, 3, 4] == [1, 3, 6, 10]
 
   do
-    let countMachineP :: MachineObs Int (Mono () Int)
-        countMachineP = machineObs $ \s -> EP (EK s, EE (\() -> s + 1))
-        countProcess = asProcess countMachineP 0
-    assert "asProcess count" $ scanProcess countProcess [(), (), ()] == [1, 2, 3]
+    let countCell :: Cell (,) Int (->) () Int
+        countCell = evalAsCell $ \s -> EP (EK s, EE (\() -> s + 1))
+        countProcess = processFromSeed 0 countCell
+    assert "processFromSeed count" $ scanProcess countProcess [(), (), ()] == [1, 2, 3]
 
   do
-    let sumMachineP :: MachineObs Int (Mono Int Int)
-        sumMachineP = machineObs $ \s -> EP (EK s, EE (\o -> s + o))
-    assert "iterateDiag sum" $ iterateDiag sumMachineP 0 [1, 2, 3, 4] == [1, 3, 6, 10]
+    let sumCell :: Cell (,) Int (->) Int Int
+        sumCell = evalAsCell $ \s -> EP (EK s, EE (\o -> s + o))
+    assert "iterateDiag sum" $ iterateDiag sumCell 0 [1, 2, 3, 4] == [1, 3, 6, 10]
 
   do
-    let countMachineP :: MachineObs Int (Mono () Int)
-        countMachineP = machineObs $ \s -> EP (EK s, EE (\() -> s + 1))
-    assert "iterateDiag count" $ iterateDiag countMachineP 0 [(), (), ()] == [1, 2, 3]
+    let countCell :: Cell (,) Int (->) () Int
+        countCell = evalAsCell $ \s -> EP (EK s, EE (\() -> s + 1))
+    assert "iterateDiag count" $ iterateDiag countCell 0 [(), (), ()] == [1, 2, 3]
 
   do
     -- K1 · closing agrees with running open.
     --
-    -- Converting a Machine (,) to a Process and scanning it yields the same output
-    -- stream as iterateDiag.
-    let sumMachineP :: MachineObs Int (Mono Int Int)
-        sumMachineP = machineObs $ \s -> EP (EK s, EE (\o -> s + o))
-        countMachineP :: MachineObs Int (Mono () Int)
-        countMachineP = machineObs $ \s -> EP (EK s, EE (\() -> s + 1))
-    assert "K1 asProcess . asProcess agrees with iterateDiag (sum)" $
-      scanProcess (asProcess sumMachineP 0) [1, 2, 3, 4] == iterateDiag sumMachineP 0 [1, 2, 3, 4]
-    assert "K1 asProcess . asProcess agrees with iterateDiag (count)" $
-      scanProcess (asProcess countMachineP 0) [(), (), ()] == iterateDiag countMachineP 0 [(), (), ()]
+    -- Converting a Cell to a Process via processFromSeed and scanning it
+    -- yields the same output stream as iterateDiag.
+    let sumCell :: Cell (,) Int (->) Int Int
+        sumCell = evalAsCell $ \s -> EP (EK s, EE (\o -> s + o))
+        countCell :: Cell (,) Int (->) () Int
+        countCell = evalAsCell $ \s -> EP (EK s, EE (\() -> s + 1))
+    assert "K1 processFromSeed agrees with iterateDiag (sum)" $
+      scanProcess (processFromSeed 0 sumCell) [1, 2, 3, 4] == iterateDiag sumCell 0 [1, 2, 3, 4]
+    assert "K1 processFromSeed agrees with iterateDiag (count)" $
+      scanProcess (processFromSeed 0 countCell) [(), (), ()] == iterateDiag countCell 0 [(), (), ()]
 
   do
-    -- K3 · Machine-ness: the output component factors through the carrier alone.
+    -- K3 · cell-ness: the output leg factors through the carrier alone.
     --
-    -- For a Machine machine over a monomial interface, the current output must not
-    -- depend on the current input direction.
-    let sys :: MachineObs Int (Mono Int Int)
-        sys = machineObs $ \s -> EP (EK s, EE (\o -> s + o))
-        f = machineMorphism (moMachine sys)
-        (_, pos1) = f (5, Right 10)
-        (_, pos2) = f (5, Right 20)
-        (_, pos3) = f (7, Right 10)
+    -- For a cell over a monomial interface, the current output must not
+    -- depend on the current input direction.  The elimination at (s, i)
+    -- pairs the next state absorb sys (s, i) with the output observe sys s.
+    let sys :: Cell (,) Int (->) Int Int
+        sys = evalAsCell $ \s -> EP (EK s, EE (\o -> s + o))
+        pos1 = observe sys 5 -- output half of the elimination at (5, 10)
+        pos2 = observe sys 5 -- output half of the elimination at (5, 20)
+        pos3 = observe sys 7 -- output half of the elimination at (7, 10)
     assert "K3 output depends only on state" $ pos1 == pos2 && pos1 /= pos3
 
   do
@@ -882,90 +830,38 @@ main = do
     assert "K2 fused parameters concatenate by projection" $
       abs (dp1 - dp1') < 1e-10 && abs (dp2 - dp2') < 1e-10
 
-  do
-    let sumMachineP :: MachineObs Int (Mono Int Int)
-        sumMachineP = machineObs $ \s -> EP (EK s, EE (\o -> s + o))
-    assert "duplicateMachine sum" $
-      case toEvalMachine (duplicateMachine sumMachineP) 0 of
-        EC ((s, ()), hang) k ->
-          s == 0
-            && hang (Right 1) == (1, ())
-            && hang (Right 5) == (5, ())
-            && k (Right 1, Right 2) == 3
-            && k (Right 10, Right 20) == 30
-
-  do
-    let sumMachineP :: MachineObs Int (Mono Int Int)
-        sumMachineP = machineObs $ \s -> EP (EK s, EE (\o -> s + o))
-
-        -- Feed one input through duplicateMachine.
-        feed2 sys s (o1, o2) =
-          case toEvalMachine (duplicateMachine sys) s of
-            EC _ k -> k (Right o1, Right o2)
-
-        -- Left-grouped three inputs: duplicate the right factor.
-        feed3L sys s (o1, (o2, o3)) =
-          case toEvalMachine (duplicateMachine sys) s of
-            EC ((_, ()), hang) _ ->
-              let s1 = fst (hang (Right o1))
-               in feed2 sys s1 (o2, o3)
-
-        -- Right-grouped three inputs: duplicate the left factor.
-        feed3R sys s ((o1, o2), o3) =
-          let s2 = feed2 sys s (o1, o2)
-           in snd (runMono sys s2) o3
-
-    assert "duplicateMachine coassociativity" $
-      feed3L sumMachineP 0 (1, (2, 3)) == 6
-        && feed3R sumMachineP 0 ((1, 2), 3) == 6
-        && feed3L sumMachineP 5 (10, (20, 30)) == feed3R sumMachineP 5 ((10, 20), 30)
-
-  do
-    -- Counit law: extracting the inner position from duplicateMachine recovers
-    -- the original step function. This is the comonad counit for systems where
-    -- the output position is the state.
-    let countMachineP :: MachineObs Int (Mono () Int)
-        countMachineP = machineObs $ \s -> EP (EK s, EE (\() -> s + 1))
-    assert "duplicateMachine counit (count)" $
-      case toEvalMachine (duplicateMachine countMachineP) 0 of
-        EC ((s, ()), hang) k ->
-          s == 0
-            && hang (Right ()) == (1, ())
-            && k (Right (), Right ()) == 2
-
   ----------------------------------------------------------------------
-  -- S1: coalgebra = lens (Machine (,) s p ≅ Poly(S y^S, p))
+  -- S1: cell = lens (Cell (,) s i o ≅ Lens s s o i)
   ----------------------------------------------------------------------
   do
-    let sys :: MachineObs Int (Mono Int Int)
-        sys = machineObs $ \s -> EP (EK (s * 2), EE (\i -> s + i))
-        pp = asProcess sys 0
+    let sys :: Cell (,) Int (->) Int Int
+        sys = evalAsCell $ \s -> EP (EK (s * 2), EE (\i -> s + i))
         -- Round-trip preserves the (output, transition) view at every state.
         roundTripOk s =
-          let pp' = lensAsProcess (processAsLens pp) s
-           in processExtract pp s == processExtract pp' s
-                && all (\i -> processStep pp s i == processStep pp' s i) [-5 .. 5]
-    assert "S1: lensAsProcess . processAsLens round-trips" $
+          let sys' = lensAsCell (cellAsLens sys)
+           in observe sys s == observe sys' s
+                && all (\i -> absorb sys (s, i) == absorb sys' (s, i)) [-5 .. 5]
+    assert "S1: lensAsCell . cellAsLens round-trips" $
       all roundTripOk [0 .. 5]
 
     -- The other direction of the iso: build a lens directly, round-trip
-    -- through a pointed process, and compare on positions and directions.
+    -- through a cell, and compare on positions and directions.
     let m :: Morphism (Mono Int Int) (Mono Int Int)
         m = lens (\s -> s * 2) (\s i -> s + i)
-        m' = processAsLens (lensAsProcess m 0)
+        m' = cellAsLens (lensAsCell m)
         roundTripLensOk s =
           let (o, put) = applyLens m s
               (o', put') = applyLens m' s
            in o == o' && all (\i -> put i == put' i) [-5 .. 5]
-    assert "S1: processAsLens . lensAsProcess round-trips" $
+    assert "S1: cellAsLens . lensAsCell round-trips" $
       all roundTripLensOk [0 .. 5]
 
   ----------------------------------------------------------------------
   -- S2: comonoid = category concretely
   ----------------------------------------------------------------------
   do
-    let sys :: MachineObs Int (Mono Int Int)
-        sys = machineObs $ \s -> EP (EK s, EE (\i -> s + i))
+    let sys :: Cell (,) Int (->) Int Int
+        sys = evalAsCell $ \s -> EP (EK s, EE (\i -> s + i))
         s0 = 0
         xs = [1, 2, 3] :: [Int]
         ys = [4, 5] :: [Int]
@@ -976,208 +872,6 @@ main = do
     assert "S2: input words compose by concatenation" $
       iterateDiag sys s0 (xs ++ ys)
         == iterateDiag sys s0 xs ++ iterateDiag sys (finalDiag sys s0 xs) ys
-
-  ----------------------------------------------------------------------
-  -- Coalgebra type with GADT fix (phase 2 stub)
-  ----------------------------------------------------------------------
-  do
-    -- A Coalgebra s 'Y q avoids the flat Dir q family by using Eval q s as
-    -- the step type: Eval is the GADT that pairs each position with its own
-    -- direction consumer. Here q is monomial for simplicity.
-    let sys :: MachineObs Int (Mono Int Int)
-        sys = machineObs $ \s -> EP (EK (s * 2), EE (\i -> s + i))
-        coal :: Coalgebra Int 'Y (Mono Int Int)
-        coal = machineToCoalgebraMono sys
-        sys' = coalgebraToMachine coal
-    -- Round-trip through Coalgebra and back.
-    assert "Coalgebra bridge: machineToCoalgebraMono . coalgebraToMachine round-trips" $
-      iterateDiag sys' 0 [1, 2, 3] == iterateDiag sys 0 [1, 2, 3]
-    -- act and upd agree on positions; act is the static wiring pattern and
-    -- upd is the full dynamics, so we compare output positions only.
-    let eval1 = upd coal 0 (EY (0 :: Int))
-        eval2 = runMorphism (act coal 0) (EY (0 :: Int))
-        consistencyOk =
-          let (o1, _) = evalToMachine eval1
-              (o2, _) = evalToMachine eval2
-           in o1 == o2
-    assert "Coalgebra act/upd position consistency" consistencyOk
-
-  do
-    -- Build a coalgebra directly and run it as a system.
-    let coal :: Coalgebra Int 'Y (Mono Int Int)
-        coal =
-          Coalgebra
-            { act = \s -> Point (EP (EK (s * 2 :: Int), EE (\_ -> ()))),
-              upd = \s _ -> EP (EK (s * 2), EE (\i -> s + i))
-            }
-        sys = coalgebraToMachine coal
-    assert "Coalgebra Y -> Mono runs as System" $
-      iterateDiag sys 0 [1, 2, 3] == [2, 6, 12]
-
-  ----------------------------------------------------------------------
-  -- O4: coalgebra composition is associative
-  ----------------------------------------------------------------------
-  do
-    -- Three closed coalgebras with monomial interfaces. Each is a simple
-    -- Machine machine: output depends on state, next state depends on input.
-    let cA :: Coalgebra Int 'Y (Mono Int Int)
-        cA =
-          Coalgebra
-            { act = \s -> Point (EP (EK (s + 1), EE (\_ -> ()))),
-              upd = \s _ -> EP (EK (s + 1), EE (\i -> s + i))
-            }
-        cB :: Coalgebra Int 'Y (Mono Int Int)
-        cB =
-          Coalgebra
-            { act = \s -> Point (EP (EK (s * 2), EE (\_ -> ()))),
-              upd = \s _ -> EP (EK (s * 2), EE (\i -> s + i))
-            }
-        cC :: Coalgebra Int 'Y (Mono Int Int)
-        cC =
-          Coalgebra
-            { act = \s -> Point (EP (EK (s - 1), EE (\_ -> ()))),
-              upd = \s _ -> EP (EK (s - 1), EE (\i -> s + i))
-            }
-
-        -- Helpers to run a nested composition product of three monomials and
-        -- collect the (o1, o2, o3) output triples plus the final state.
-        runNested ::
-          MachineObs s (Comp (Mono Int Int) (Comp (Mono Int Int) (Mono Int Int))) ->
-          s ->
-          [(Int, Int, Int)] ->
-          [(Int, Int, Int, s)]
-        runNested _ _ [] = []
-        runNested sys s ((i1, i2, i3) : is) =
-          case toEvalMachine sys s of
-            EC ((o1, ()), hangOuter) k ->
-              let ((o2, ()), hangInner) = hangOuter (Right i1)
-                  (o3, ()) = hangInner (Right i2)
-                  s' = k (Right i1, (Right i2, Right i3))
-               in (o1, o2, o3, s') : runNested sys s' is
-
-        runLeftNested ::
-          MachineObs s (Comp (Comp (Mono Int Int) (Mono Int Int)) (Mono Int Int)) ->
-          s ->
-          [(Int, Int, Int)] ->
-          [(Int, Int, Int, s)]
-        runLeftNested _ _ [] = []
-        runLeftNested sys s ((i1, i2, i3) : is) =
-          case toEvalMachine sys s of
-            EC (((o1, ()), hangPQ), hangR) k ->
-              let (o2, ()) = hangPQ (Right i1)
-                  (o3, ()) = hangR (Right i1, Right i2)
-                  s' = k ((Right i1, Right i2), Right i3)
-               in (o1, o2, o3, s') : runLeftNested sys s' is
-
-        assoc3 :: ((a, b), c) -> (a, (b, c))
-        assoc3 ((a, b), c) = (a, (b, c))
-
-        coalL = composeCoalgebra (composeCoalgebra cA cB) cC
-        coalR = composeCoalgebra cA (composeCoalgebra cB cC)
-        leftSys =
-          coalgebraToMachine coalL ::
-            MachineObs ((Int, Int), Int) (Comp (Comp (Mono Int Int) (Mono Int Int)) (Mono Int Int))
-        rightSys =
-          coalgebraToMachine coalR ::
-            MachineObs (Int, (Int, Int)) (Comp (Mono Int Int) (Comp (Mono Int Int) (Mono Int Int)))
-
-        inputs = [(1, 2, 3), (4, 5, 6), (7, 8, 9)] :: [(Int, Int, Int)]
-        leftResults = runLeftNested leftSys ((0, 10), 20) inputs
-        rightResults = runNested rightSys (0, (10, 20)) inputs
-
-        -- Outputs must coincide, and the carried states must correspond under
-        -- the associator.
-        outputsMatch =
-          all
-            (\((o1, o2, o3, _), (o1', o2', o3', _)) -> o1 == o1' && o2 == o2' && o3 == o3')
-            (zip leftResults rightResults)
-        statesMatch =
-          all
-            (\((_, _, _, sL), (_, _, _, sR)) -> assoc3 sL == sR)
-            (zip leftResults rightResults)
-    assert "O4: (cA ∘ cB) ∘ cC outputs == cA ∘ (cB ∘ cC) outputs" outputsMatch
-    assert "O4: associator maps composite states" statesMatch
-
-  ----------------------------------------------------------------------
-  -- Phase 6: Sum-interface agent (stage 3a headline)
-  ----------------------------------------------------------------------
-  do
-    let sumSys :: MachineObs Int (Mono Int Int)
-        sumSys = machineObs $ \s -> EP (EK s, EE (\n -> s + n))
-        doubleSys :: MachineObs Int (Mono Int Int)
-        doubleSys = machineObs $ \s -> EP (EK (s * 2), EE (\o -> s * 2 + o))
-        branchSys :: Machine (,) Int (->) ('Sum (Mono Int Int) (Mono Int Int))
-        branchSys = moMachine (branchMachine even sumSys doubleSys)
-        (out0, step0) = runMachineSum (certifyBranch even sumSys doubleSys branchSys) 0
-        s1 = step0 5
-        (out1, step1) = runMachineSum (certifyBranch even sumSys doubleSys branchSys) s1
-        s2 = step1 3
-    assert "branchMachine selects left branch on even state" $
-      out0 == Left 0 && s1 == 5
-    assert "branchMachine selects right branch on odd state" $
-      out1 == Right 10 && s2 == 13
-
-  do
-    -- Round-trip: running a Sum-interface system recovers the underlying
-    -- monomial behaviours branch-for-branch.
-    let incSys :: MachineObs Int (Mono Int Int)
-        incSys = machineObs $ \s -> EP (EK s, EE (\o -> s + o))
-        decSys :: MachineObs Int (Mono Int Int)
-        decSys = machineObs $ \s -> EP (EK s, EE (\o -> s - o))
-        branchSys = moMachine (branchMachine (\s -> s >= 0) incSys decSys)
-        (outNeg, stepNeg) = runMachineSum (certifyBranch (\s -> s >= 0) incSys decSys branchSys) (-1)
-        (outPos, stepPos) = runMachineSum (certifyBranch (\s -> s >= 0) incSys decSys branchSys) 2
-    assert "branchMachine round-trip negative state" $
-      outNeg == Right (-1) && stepNeg 2 == -3
-    assert "branchMachine round-trip positive state" $
-      outPos == Left 2 && stepPos 4 == 6
-
-  do
-    -- Heterogeneous sum interface: the two branches have different direction
-    -- types, so the runner uses a GADT to make the position-dependency total.
-    -- This is the real stage-3a headline: interface-level choice with a
-    -- position-dependent input type, no error, no 'Dir' row needed.
-    let sumSys :: MachineObs Int (Mono Int Int)
-        sumSys = machineObs $ \s -> EP (EK s, EE (\n -> s + n))
-        countSys :: MachineObs Int (Mono () Int)
-        countSys = machineObs $ \s -> EP (EK s, EE (\() -> s + 1))
-        branchSys :: Machine (,) Int (->) ('Sum (Mono Int Int) (Mono () Int))
-        branchSys = moMachine (branchMachineHet even sumSys countSys)
-        branchObs = certifyBranchHet even sumSys countSys branchSys
-        s1 = case runMachineSumHet branchObs 0 of
-          SumStepL _ f -> f 5
-          SumStepR _ _ -> error "expected left branch"
-        (o, s2) = case runMachineSumHet branchObs s1 of
-          SumStepR o' f -> (o', f ())
-          SumStepL _ _ -> error "expected right branch"
-    assert "branchMachineHet left branch consumes Int" $ s1 == 5
-    assert "branchMachineHet right branch consumes ()" $ o == 5 && s2 == 6
-
-  do
-    -- S4 · mode-dependence: position is determined by the carrier; the
-    -- direction type is determined by the presented position.
-    let sumSys :: MachineObs Int (Mono Int Int)
-        sumSys = machineObs $ \s -> EP (EK s, EE (\n -> s + n))
-        countSys :: MachineObs Int (Mono () Int)
-        countSys = machineObs $ \s -> EP (EK s, EE (\() -> s + 1))
-        branchSys :: Machine (,) Int (->) ('Sum (Mono Int Int) (Mono () Int))
-        branchSys = moMachine (branchMachineHet even sumSys countSys)
-        branchObs = certifyBranchHet even sumSys countSys branchSys
-        -- (a) the presented position is a function of the carrier alone.
-        branchOf s = case runMachineSumHet branchObs s of
-          SumStepL {} -> True
-          SumStepR {} -> False
-        -- (b) each branch wires to its own transition; the GADT makes the
-        -- position-dependent dispatcher total at compile time, while the
-        -- assertion checks the runtime wiring (left adds 10, right adds 1).
-        stepModeDependent s = case runMachineSumHet branchObs s of
-          SumStepL _ f -> f 10
-          SumStepR _ f -> f ()
-        states = [-2 .. 2 :: Int]
-    assert "S4a: position determined by carrier" $
-      all (\s -> branchOf s == even s) states
-    assert "S4b: each branch wires to its own transition" $
-      all (\s -> stepModeDependent s == (if even s then s + 10 else s + 1)) states
 
   do
     -- G4a · gradient through a seeded loop matches finite difference.
@@ -1245,7 +939,7 @@ main = do
     -- bogus gradient.  With p = 2 the primal still converges at the seed,
     -- but the feedback Jacobian is J = 2, outside the star regime.
     let nonContractiveClosed :: DiffP Double Double Double
-        nonContractiveClosed = monoPost . traceDiffPD 0.0 1e-12 50 (machineMorphismArr (diffPMono g4Step)) . monoPre
+        nonContractiveClosed = monoPost . traceDiffPD 0.0 1e-12 50 (diffPMono g4Step) . monoPre
     assertError "T3 rejects |J| >= 1" (fst (runDiffP nonContractiveClosed 2.0 0.0))
 
   ----------------------------------------------------------------------
