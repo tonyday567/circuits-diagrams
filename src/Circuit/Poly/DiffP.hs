@@ -57,11 +57,11 @@ diffPAt (DiffP f) p = lens get put
 diffPParamGrad :: DiffP p a b -> p -> a -> b -> p
 diffPParamGrad (DiffP f) p a db = snd (snd (f p a) db)
 
--- | View a 'DiffP' as a 'Poly' morphism @Const p * Mono a a -> Mono b b@.
+-- | View a 'DiffP' as a 'Poly' morphism @Konst p * Mono a a -> Mono b b@.
 --
 -- The parameter is carried by the constant functor; choosing a position @p@
 -- selects one lens from the family.
-diffPAsFamily :: DiffP p a b -> Morphism ('Prod ('Const p) (Mono a a)) (Mono b b)
+diffPAsFamily :: DiffP p a b -> Morphism ('Prod ('Konst p) (Mono a a)) (Mono b b)
 diffPAsFamily d = Depend (diffPAt d)
 
 -- | Recover a 'DiffP' from its fixed-parameter lens family and parameter

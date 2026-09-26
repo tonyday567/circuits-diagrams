@@ -330,8 +330,8 @@ main = do
     assert "netRoundTrip Y" $ case netRoundTrip yv of EY c -> c == 'a'
 
   do
-    let cv = EK True :: Eval ('Const Bool) Bool
-    assert "netRoundTrip Const" $ case netRoundTrip cv of EK b -> b
+    let cv = EK True :: Eval ('Konst Bool) Bool
+    assert "netRoundTrip Konst" $ case netRoundTrip cv of EK b -> b
 
   do
     let ev = EE (\case 'a' -> 1; 'b' -> 2; _ -> 3) :: Eval ('Exp Char) Int
@@ -1185,8 +1185,8 @@ main = do
 
   do
     -- ConstMap: covariant embedding of a function into constants.
-    let m = ConstMap (+ 1) :: Morphism ('Const Int) ('Const Int)
-        v = EK 5 :: Eval ('Const Int) Int
+    let m = ConstMap (+ 1) :: Morphism ('Konst Int) ('Konst Int)
+        v = EK 5 :: Eval ('Konst Int) Int
     assert "ConstMap naturality" $
       evalNetEq [] (fmap show (runMorphism m v)) (runMorphism m (fmap show v))
 
@@ -1199,10 +1199,10 @@ main = do
 
   do
     -- Compose: naturality is preserved under composition.
-    let f = ConstMap (+ 1) :: Morphism ('Const Int) ('Const Int)
-        g = ConstMap (* 2) :: Morphism ('Const Int) ('Const Int)
+    let f = ConstMap (+ 1) :: Morphism ('Konst Int) ('Konst Int)
+        g = ConstMap (* 2) :: Morphism ('Konst Int) ('Konst Int)
         m = Compose f g
-        v = EK 5 :: Eval ('Const Int) Int
+        v = EK 5 :: Eval ('Konst Int) Int
     assert "Compose naturality" $
       evalNetEq [] (fmap show (runMorphism m v)) (runMorphism m (fmap show v))
 
@@ -1210,8 +1210,8 @@ main = do
     -- Par: functorial action on product factors.
     let m =
           Par (ConstMap (+ 1)) (ExpMap (* 2)) ::
-            Morphism ('Prod ('Const Int) ('Exp Int)) ('Prod ('Const Int) ('Exp Int))
-        v = EP (EK 5, EE (+ 10)) :: Eval ('Prod ('Const Int) ('Exp Int)) Int
+            Morphism ('Prod ('Konst Int) ('Exp Int)) ('Prod ('Konst Int) ('Exp Int))
+        v = EP (EK 5, EE (+ 10)) :: Eval ('Prod ('Konst Int) ('Exp Int)) Int
     assert "Par naturality" $
       evalNetEq
         [Right 0, Right 1, Right 2]
@@ -1220,8 +1220,8 @@ main = do
 
   do
     -- Inl: left injection into a coproduct.
-    let m = Inl :: Morphism ('Const Int) ('Sum ('Const Int) ('Const String))
-        v = EK 5 :: Eval ('Const Int) Int
+    let m = Inl :: Morphism ('Konst Int) ('Sum ('Konst Int) ('Konst String))
+        v = EK 5 :: Eval ('Konst Int) Int
     assert "Inl naturality" $
       case (fmap show (runMorphism m v), runMorphism m (fmap show v)) of
         (ES (Left (EK a)), ES (Left (EK b))) -> a == b
@@ -1229,8 +1229,8 @@ main = do
 
   do
     -- Inr: right injection into a coproduct.
-    let m = Inr :: Morphism ('Const String) ('Sum ('Const Int) ('Const String))
-        v = EK "hi" :: Eval ('Const String) Int
+    let m = Inr :: Morphism ('Konst String) ('Sum ('Konst Int) ('Konst String))
+        v = EK "hi" :: Eval ('Konst String) Int
     assert "Inr naturality" $
       case (fmap show (runMorphism m v), runMorphism m (fmap show v)) of
         (ES (Right (EK a)), ES (Right (EK b))) -> a == b
@@ -1240,29 +1240,29 @@ main = do
     -- Case: coproduct elimination.
     let m =
           Case (ConstMap (+ 1)) (ConstMap length) ::
-            Morphism ('Sum ('Const Int) ('Const String)) ('Const Int)
-        v = ES (Left (EK 5)) :: Eval ('Sum ('Const Int) ('Const String)) Int
+            Morphism ('Sum ('Konst Int) ('Konst String)) ('Konst Int)
+        v = ES (Left (EK 5)) :: Eval ('Sum ('Konst Int) ('Konst String)) Int
     assert "Case naturality" $
       evalNetEq [] (fmap show (runMorphism m v)) (runMorphism m (fmap show v))
 
   do
     -- Fst: first projection.
-    let m = Fst :: Morphism ('Prod ('Const Int) ('Const String)) ('Const Int)
-        v = EP (EK 5, EK "x") :: Eval ('Prod ('Const Int) ('Const String)) Int
+    let m = Fst :: Morphism ('Prod ('Konst Int) ('Konst String)) ('Konst Int)
+        v = EP (EK 5, EK "x") :: Eval ('Prod ('Konst Int) ('Konst String)) Int
     assert "Fst naturality" $
       evalNetEq [] (fmap show (runMorphism m v)) (runMorphism m (fmap show v))
 
   do
     -- Snd: second projection.
-    let m = Snd :: Morphism ('Prod ('Const Int) ('Const String)) ('Const String)
-        v = EP (EK 5, EK "x") :: Eval ('Prod ('Const Int) ('Const String)) Int
+    let m = Snd :: Morphism ('Prod ('Konst Int) ('Konst String)) ('Konst String)
+        v = EP (EK 5, EK "x") :: Eval ('Prod ('Konst Int) ('Konst String)) Int
     assert "Snd naturality" $
       evalNetEq [] (fmap show (runMorphism m v)) (runMorphism m (fmap show v))
 
   do
     -- Pair: pairing of morphisms into a product.
-    let m = Pair Fst Snd :: Morphism ('Prod ('Const Int) ('Const String)) ('Prod ('Const Int) ('Const String))
-        v = EP (EK 5, EK "x") :: Eval ('Prod ('Const Int) ('Const String)) Int
+    let m = Pair Fst Snd :: Morphism ('Prod ('Konst Int) ('Konst String)) ('Prod ('Konst Int) ('Konst String))
+        v = EP (EK 5, EK "x") :: Eval ('Prod ('Konst Int) ('Konst String)) Int
     assert "Pair naturality" $
       evalNetEq
         []
@@ -1270,18 +1270,18 @@ main = do
         (runMorphism m (fmap show v))
 
   do
-    -- Konst: constant morphism.
-    let m = Konst 7 :: Morphism 'Y ('Const Int)
+    -- Global: constant morphism.
+    let m = Global 7 :: Morphism 'Y ('Konst Int)
         v = EY 5 :: Eval 'Y Int
-    assert "Konst naturality" $
+    assert "Global naturality" $
       evalNetEq [] (fmap show (runMorphism m v)) (runMorphism m (fmap show v))
 
   do
     -- Depend: copower universal property (position-dependent lens).
     let m =
           Depend (\a -> ConstMap (+ a)) ::
-            Morphism ('Prod ('Const Int) ('Const Int)) ('Const Int)
-        v = EP (EK 3, EK 5) :: Eval ('Prod ('Const Int) ('Const Int)) Int
+            Morphism ('Prod ('Konst Int) ('Konst Int)) ('Konst Int)
+        v = EP (EK 3, EK 5) :: Eval ('Prod ('Konst Int) ('Konst Int)) Int
     assert "Depend naturality" $
       evalNetEq [] (fmap show (runMorphism m v)) (runMorphism m (fmap show v))
 
