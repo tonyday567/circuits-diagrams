@@ -20,11 +20,11 @@ import Circuit.Diagram.Hyper
 import Circuit.Diff.Param (DiffP (..), splitP)
 import Circuit.GMachine
   ( Cell (..),
+    Moore,
     cellAsLens,
-    evalAsCell,
     lensAsCell,
-    processFromSeed,
-    scanProcess,
+    moore,
+    scan,
   )
 import Circuit.Poly
 import Circuit.Poly qualified as Poly
@@ -106,8 +106,18 @@ assertError msg action = do
       exitFailure
 
 -- | Runners for cells over the monomial interface.
+--
+-- arc-2 removed processFromSeed from GMachine and re-typed evalAsCell in
+-- Circuit.Poly as the (step, output) legs; these shims keep the oracle
+-- sites on the old names.
+processFromSeed :: s -> Cell (,) s (->) i o -> Moore i o
+processFromSeed s0 (Cell k o) = moore (\a -> k (s0, a)) (curry k) o
+
+cellFromEval :: (s -> Eval (Mono i o) s) -> Cell (,) s (->) i o
+cellFromEval f = case evalAsCell f of (k, o) -> Cell k o
+
 iterateDiag :: Cell (,) s (->) i o -> s -> [i] -> [o]
-iterateDiag sys s0 = scanProcess (processFromSeed s0 sys)
+iterateDiag sys s0 = scan (processFromSeed s0 sys)
 
 finalDiag :: Cell (,) s (->) i o -> s -> [i] -> s
 finalDiag sys s0 is = foldl' step s0 is
@@ -744,24 +754,24 @@ main = do
   putStrLn "Phase 6: Cell / Process bridge"
   do
     let sumCell :: Cell (,) Int (->) Int Int
-        sumCell = evalAsCell $ \s -> EP (EK s, EE (\o -> s + o))
+        sumCell = cellFromEval $ \s -> EP (EK s, EE (\o -> s + o))
         sumProcess = processFromSeed 0 sumCell
-    assert "processFromSeed sum" $ scanProcess sumProcess [1, 2, 3, 4] == [1, 3, 6, 10]
+    assert "processFromSeed sum" $ scan sumProcess [1, 2, 3, 4] == [1, 3, 6, 10]
 
   do
     let countCell :: Cell (,) Int (->) () Int
-        countCell = evalAsCell $ \s -> EP (EK s, EE (\() -> s + 1))
+        countCell = cellFromEval $ \s -> EP (EK s, EE (\() -> s + 1))
         countProcess = processFromSeed 0 countCell
-    assert "processFromSeed count" $ scanProcess countProcess [(), (), ()] == [1, 2, 3]
+    assert "processFromSeed count" $ scan countProcess [(), (), ()] == [1, 2, 3]
 
   do
     let sumCell :: Cell (,) Int (->) Int Int
-        sumCell = evalAsCell $ \s -> EP (EK s, EE (\o -> s + o))
+        sumCell = cellFromEval $ \s -> EP (EK s, EE (\o -> s + o))
     assert "iterateDiag sum" $ iterateDiag sumCell 0 [1, 2, 3, 4] == [1, 3, 6, 10]
 
   do
     let countCell :: Cell (,) Int (->) () Int
-        countCell = evalAsCell $ \s -> EP (EK s, EE (\() -> s + 1))
+        countCell = cellFromEval $ \s -> EP (EK s, EE (\() -> s + 1))
     assert "iterateDiag count" $ iterateDiag countCell 0 [(), (), ()] == [1, 2, 3]
 
   do
@@ -770,13 +780,13 @@ main = do
     -- Converting a Cell to a Process via processFromSeed and scanning it
     -- yields the same output stream as iterateDiag.
     let sumCell :: Cell (,) Int (->) Int Int
-        sumCell = evalAsCell $ \s -> EP (EK s, EE (\o -> s + o))
+        sumCell = cellFromEval $ \s -> EP (EK s, EE (\o -> s + o))
         countCell :: Cell (,) Int (->) () Int
-        countCell = evalAsCell $ \s -> EP (EK s, EE (\() -> s + 1))
+        countCell = cellFromEval $ \s -> EP (EK s, EE (\() -> s + 1))
     assert "K1 processFromSeed agrees with iterateDiag (sum)" $
-      scanProcess (processFromSeed 0 sumCell) [1, 2, 3, 4] == iterateDiag sumCell 0 [1, 2, 3, 4]
+      scan (processFromSeed 0 sumCell) [1, 2, 3, 4] == iterateDiag sumCell 0 [1, 2, 3, 4]
     assert "K1 processFromSeed agrees with iterateDiag (count)" $
-      scanProcess (processFromSeed 0 countCell) [(), (), ()] == iterateDiag countCell 0 [(), (), ()]
+      scan (processFromSeed 0 countCell) [(), (), ()] == iterateDiag countCell 0 [(), (), ()]
 
   do
     -- K3 · cell-ness: the output leg factors through the carrier alone.
@@ -785,7 +795,7 @@ main = do
     -- depend on the current input direction.  The elimination at (s, i)
     -- pairs the next state absorb sys (s, i) with the output observe sys s.
     let sys :: Cell (,) Int (->) Int Int
-        sys = evalAsCell $ \s -> EP (EK s, EE (\o -> s + o))
+        sys = cellFromEval $ \s -> EP (EK s, EE (\o -> s + o))
         pos1 = observe sys 5 -- output half of the elimination at (5, 10)
         pos2 = observe sys 5 -- output half of the elimination at (5, 20)
         pos3 = observe sys 7 -- output half of the elimination at (7, 10)
@@ -835,7 +845,7 @@ main = do
   ----------------------------------------------------------------------
   do
     let sys :: Cell (,) Int (->) Int Int
-        sys = evalAsCell $ \s -> EP (EK (s * 2), EE (\i -> s + i))
+        sys = cellFromEval $ \s -> EP (EK (s * 2), EE (\i -> s + i))
         -- Round-trip preserves the (output, transition) view at every state.
         roundTripOk s =
           let sys' = lensAsCell (cellAsLens sys)
@@ -861,7 +871,7 @@ main = do
   ----------------------------------------------------------------------
   do
     let sys :: Cell (,) Int (->) Int Int
-        sys = evalAsCell $ \s -> EP (EK s, EE (\i -> s + i))
+        sys = cellFromEval $ \s -> EP (EK s, EE (\i -> s + i))
         s0 = 0
         xs = [1, 2, 3] :: [Int]
         ys = [4, 5] :: [Int]

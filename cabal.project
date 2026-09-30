@@ -1,5 +1,6 @@
 packages:
   circuits-diagrams.cabal
+  ../circuits/circuits.cabal
   ../circuits-prob/circuits-prob.cabal
 
 write-ghc-environment-files: always
