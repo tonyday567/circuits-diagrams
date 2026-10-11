@@ -1,6 +1,11 @@
 packages:
   circuits-diagrams.cabal
   ../circuits/circuits.cabal
+  ../circuits-diff/circuits-diff.cabal
+  ../circuits-mat/circuits-mat.cabal
   ../circuits-prob/circuits-prob.cabal
+  ../circuits-rel/circuits-rel.cabal
+  ../harpie/harpie.cabal
+  ../numhask/numhask.cabal
 
 write-ghc-environment-files: always

@@ -18,11 +18,12 @@ import Circuit.Diagram.Hyper
     normalise,
   )
 import Circuit.Diff.Param (DiffP (..), splitP)
-import Circuit.GMachine
-  ( Cell (..),
+import Circuit.Machine
+  ( Body (Body, commit, emit),
     Moore,
-    cellAsLens,
-    lensAsCell,
+    MooreT (..),
+    bodyAsLens,
+    lensAsBody,
     moore,
     scan,
   )
@@ -80,6 +81,7 @@ import Circuit.Poly.StringDiagram
     unitR',
     wire,
   )
+import Circuit.Tensor (Const (..), unConst)
 import Control.Exception (ErrorCall, evaluate, try)
 import Data.List (scanl')
 import Data.Maybe (isJust, isNothing)
@@ -107,22 +109,34 @@ assertError msg action = do
 
 -- | Runners for cells over the monomial interface.
 --
--- arc-2 removed processFromSeed from GMachine and re-typed evalAsCell in
--- Circuit.Poly as the (step, output) legs; these shims keep the oracle
--- sites on the old names.
-processFromSeed :: s -> Cell (,) s (->) i o -> Moore i o
-processFromSeed s0 (Cell k o) = moore (\a -> k (s0, a)) (curry k) o
+-- The machine layer factored the old Cell through the channel: a
+-- 'Moore' body's 'commit' is the old absorb, its 'emit' (sealed at
+-- 'Const') the old observe.  A cell never carried a seed, so these
+-- shims keep the old run-time seeding; 'evalAsCell' in Circuit.Poly
+-- still supplies the (step, output) legs, and where the new 'Body'
+-- demands an 'init' the oracles never run, the absence is the named
+-- bottom 'unseeded'.
+processFromSeed :: s -> Moore (,) s (->) i o -> MooreT (,) (->) i o
+processFromSeed s0 (Body _ k e) = moore (\a -> k (s0, a)) (curry k) (unConst . e)
 
-cellFromEval :: (s -> Eval (Mono i o) s) -> Cell (,) s (->) i o
-cellFromEval f = case evalAsCell f of (k, o) -> Cell k o
+cellFromEval :: (s -> Eval (Mono i o) s) -> Moore (,) s (->) i o
+cellFromEval f = Body unseeded k (Const . o)
+  where
+    (k, o) = evalAsCell f
 
-iterateDiag :: Cell (,) s (->) i o -> s -> [i] -> [o]
+-- | The old Cell had no seed leg; the new 'Body' demands one.  Every
+-- oracle below seeds at run time ('processFromSeed'), so this is a
+-- checked absence, in the spirit of the file's dead 'Void' bottoms.
+unseeded :: i -> s
+unseeded = error "unseeded: the seed is supplied at run time"
+
+iterateDiag :: Moore (,) s (->) i o -> s -> [i] -> [o]
 iterateDiag sys s0 = scan (processFromSeed s0 sys)
 
-finalDiag :: Cell (,) s (->) i o -> s -> [i] -> s
+finalDiag :: Moore (,) s (->) i o -> s -> [i] -> s
 finalDiag sys s0 is = foldl' step s0 is
   where
-    step s i = absorb sys (s, i)
+    step s i = commit sys (s, i)
 
 approx :: Double -> Double -> Bool
 approx a b = abs (a - b) < 0.08
@@ -749,39 +763,39 @@ main = do
         == (Left 8, Left 7)
 
   ----------------------------------------------------------------------
-  -- Phase 6: Cell / Process bridge
+  -- Phase 6: body / process bridge
   ----------------------------------------------------------------------
-  putStrLn "Phase 6: Cell / Process bridge"
+  putStrLn "Phase 6: body / process bridge"
   do
-    let sumCell :: Cell (,) Int (->) Int Int
+    let sumCell :: Moore (,) Int (->) Int Int
         sumCell = cellFromEval $ \s -> EP (EK s, EE (\o -> s + o))
         sumProcess = processFromSeed 0 sumCell
     assert "processFromSeed sum" $ scan sumProcess [1, 2, 3, 4] == [1, 3, 6, 10]
 
   do
-    let countCell :: Cell (,) Int (->) () Int
+    let countCell :: Moore (,) Int (->) () Int
         countCell = cellFromEval $ \s -> EP (EK s, EE (\() -> s + 1))
         countProcess = processFromSeed 0 countCell
     assert "processFromSeed count" $ scan countProcess [(), (), ()] == [1, 2, 3]
 
   do
-    let sumCell :: Cell (,) Int (->) Int Int
+    let sumCell :: Moore (,) Int (->) Int Int
         sumCell = cellFromEval $ \s -> EP (EK s, EE (\o -> s + o))
     assert "iterateDiag sum" $ iterateDiag sumCell 0 [1, 2, 3, 4] == [1, 3, 6, 10]
 
   do
-    let countCell :: Cell (,) Int (->) () Int
+    let countCell :: Moore (,) Int (->) () Int
         countCell = cellFromEval $ \s -> EP (EK s, EE (\() -> s + 1))
     assert "iterateDiag count" $ iterateDiag countCell 0 [(), (), ()] == [1, 2, 3]
 
   do
     -- K1 · closing agrees with running open.
     --
-    -- Converting a Cell to a Process via processFromSeed and scanning it
+    -- Converting a body to a process via processFromSeed and scanning it
     -- yields the same output stream as iterateDiag.
-    let sumCell :: Cell (,) Int (->) Int Int
+    let sumCell :: Moore (,) Int (->) Int Int
         sumCell = cellFromEval $ \s -> EP (EK s, EE (\o -> s + o))
-        countCell :: Cell (,) Int (->) () Int
+        countCell :: Moore (,) Int (->) () Int
         countCell = cellFromEval $ \s -> EP (EK s, EE (\() -> s + 1))
     assert "K1 processFromSeed agrees with iterateDiag (sum)" $
       scan (processFromSeed 0 sumCell) [1, 2, 3, 4] == iterateDiag sumCell 0 [1, 2, 3, 4]
@@ -793,12 +807,13 @@ main = do
     --
     -- For a cell over a monomial interface, the current output must not
     -- depend on the current input direction.  The elimination at (s, i)
-    -- pairs the next state absorb sys (s, i) with the output observe sys s.
-    let sys :: Cell (,) Int (->) Int Int
+    -- pairs the next state commit sys (s, i) with the output
+    -- unConst (emit sys s).
+    let sys :: Moore (,) Int (->) Int Int
         sys = cellFromEval $ \s -> EP (EK s, EE (\o -> s + o))
-        pos1 = observe sys 5 -- output half of the elimination at (5, 10)
-        pos2 = observe sys 5 -- output half of the elimination at (5, 20)
-        pos3 = observe sys 7 -- output half of the elimination at (7, 10)
+        pos1 = unConst (emit sys 5) -- output half of the elimination at (5, 10)
+        pos2 = unConst (emit sys 5) -- output half of the elimination at (5, 20)
+        pos3 = unConst (emit sys 7) -- output half of the elimination at (7, 10)
     assert "K3 output depends only on state" $ pos1 == pos2 && pos1 /= pos3
 
   do
@@ -841,36 +856,36 @@ main = do
       abs (dp1 - dp1') < 1e-10 && abs (dp2 - dp2') < 1e-10
 
   ----------------------------------------------------------------------
-  -- S1: cell = lens (Cell (,) s i o ≅ Lens s s o i)
+  -- S1: cell = lens (Moore (,) s i o ≅ Lens s s o i)
   ----------------------------------------------------------------------
   do
-    let sys :: Cell (,) Int (->) Int Int
+    let sys :: Moore (,) Int (->) Int Int
         sys = cellFromEval $ \s -> EP (EK (s * 2), EE (\i -> s + i))
         -- Round-trip preserves the (output, transition) view at every state.
         roundTripOk s =
-          let sys' = lensAsCell (cellAsLens sys)
-           in observe sys s == observe sys' s
-                && all (\i -> absorb sys (s, i) == absorb sys' (s, i)) [-5 .. 5]
-    assert "S1: lensAsCell . cellAsLens round-trips" $
+          let sys' = lensAsBody unseeded (bodyAsLens sys)
+           in unConst (emit sys s) == unConst (emit sys' s)
+                && all (\i -> commit sys (s, i) == commit sys' (s, i)) [-5 .. 5]
+    assert "S1: lensAsBody . bodyAsLens round-trips" $
       all roundTripOk [0 .. 5]
 
     -- The other direction of the iso: build a lens directly, round-trip
     -- through a cell, and compare on positions and directions.
     let m :: Morphism (Mono Int Int) (Mono Int Int)
         m = lens (\s -> s * 2) (\s i -> s + i)
-        m' = cellAsLens (lensAsCell m)
+        m' = bodyAsLens (lensAsBody unseeded m)
         roundTripLensOk s =
           let (o, put) = applyLens m s
               (o', put') = applyLens m' s
            in o == o' && all (\i -> put i == put' i) [-5 .. 5]
-    assert "S1: cellAsLens . lensAsCell round-trips" $
+    assert "S1: bodyAsLens . lensAsBody round-trips" $
       all roundTripLensOk [0 .. 5]
 
   ----------------------------------------------------------------------
   -- S2: comonoid = category concretely
   ----------------------------------------------------------------------
   do
-    let sys :: Cell (,) Int (->) Int Int
+    let sys :: Moore (,) Int (->) Int Int
         sys = cellFromEval $ \s -> EP (EK s, EE (\i -> s + i))
         s0 = 0
         xs = [1, 2, 3] :: [Int]

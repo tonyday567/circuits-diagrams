@@ -66,9 +66,8 @@ import Circuit.Diagram (SDiagram (..), sCopy, sCreate, sDelete, sMerge)
 import Circuit.Poly (Mono, Morphism, applyLens)
 import Circuit.Poly.Int (IN, IntMorph (..))
 import Circuit.Poly.Int qualified as Int
-import Circuit.Syntax (eval)
+import Circuit.Syntax (Syntax (Lift), eval)
 import Circuit.Tensor qualified as M
-import Circuit.Syntax (Syntax (Lift))
 import Circuit.Trace (Trace)
 import Circuit.Traced (Yank (..))
 import Prelude hiding (id, (.))
@@ -175,7 +174,7 @@ toIntMorph (Diagram d) = case d of
     traceIntMorph (IntMorph body) =
       IntMorph
         ( yank
-            (Lift (\((s1, s2), (da, b)) -> ((s1, da), (s2, b)))
+            ( Lift (\((s1, s2), (da, b)) -> ((s1, da), (s2, b)))
                 Cat.. body
                 Cat.. Lift (\((s1, s2), (a, db)) -> ((s1, a), (s2, db)))
             )

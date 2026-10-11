@@ -52,7 +52,6 @@ import Circuit.Category qualified as Cat (Category (..))
 import Circuit.Poly (Mono, Morphism (Compose), applyLens, lens)
 import Circuit.Syntax (Syntax (..), eval, (:+:) (..))
 import Circuit.Tensor qualified as M (Action (..), SemiTensor (..), Tensor)
-import Circuit.Syntax (Syntax (Lift))
 import Circuit.Trace (SigYank (..), Trace)
 import Circuit.Traced (Assoc (..), Slide (..), Yank (..), yank)
 import Data.Kind (Type)
@@ -267,7 +266,7 @@ comp (IntMorph g) (IntMorph f) = IntMorph (yank (middleOut . (g `M.tensor` f) . 
 -- the factors into the required @arr (t (t ap cp) (t bm dm)) (t (t am cm) (t bp dp))@ shape.
 intTensor ::
   forall t arr ap am bp bm cp cm dp dm.
-  (M.Action t arr, Assoc t arr) =>
+  (M.Action t arr) =>
   IntMorph t arr ap am bp bm ->
   IntMorph t arr cp cm dp dm ->
   IntMorph t arr (t ap cp) (t am cm) (t bp dp) (t bm dm)
