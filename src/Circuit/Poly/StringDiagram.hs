@@ -12,7 +12,7 @@
 -- is composition, and bending a wire back uses the compact-closed cap/cup.
 --
 -- This module aliases the underlying Int machinery with string-diagram
--- names and runs the diagrams over 'Trace (,) (->)' so that feedback loops
+-- names and runs the diagrams over 'FreeTrace (,) (->)' so that feedback loops
 -- are tied into yanked traces.
 --
 -- The DSL is a /deep embedding/: every value remembers how it was built.
@@ -68,8 +68,8 @@ import Circuit.Poly.Int (IN, IntMorph (..))
 import Circuit.Poly.Int qualified as Int
 import Circuit.Syntax (Syntax (Lift), eval)
 import Circuit.Tensor qualified as M
-import Circuit.Trace (Trace)
-import Circuit.Traced (Yank (..))
+import Circuit.Trace (FreeTrace)
+import Circuit.Traced (Trace (..))
 import Prelude hiding (id, (.))
 
 -- $setup
@@ -115,7 +115,7 @@ data Diagram_ a da b db where
 
 -- | A string diagram from one bundle of wires to another.
 --
--- The base category is 'Trace (,) (->)' so that sequential composition can
+-- The base category is 'FreeTrace (,) (->)' so that sequential composition can
 -- tie feedback knots.
 newtype Diagram a da b db = Diagram (Diagram_ a da b db)
 
@@ -142,7 +142,7 @@ skeleton (Diagram d) = go d
     go (Trace_ f) = STrace (go f)
 
 -- | Convert a deep-embedding diagram back to the executable Int corridor.
-toIntMorph :: Diagram a da b db -> IntMorph (,) (Trace (,) (->)) a da b db
+toIntMorph :: Diagram a da b db -> IntMorph (,) (FreeTrace (,) (->)) a da b db
 toIntMorph (Diagram d) = case d of
   Wire_ -> IntMorph (Lift M.braid)
   Box_ _ m -> IntMorph (Lift (\(a, db) -> let (b, put) = applyLens m a in (put db, b)))
@@ -169,11 +169,11 @@ toIntMorph (Diagram d) = case d of
   Trace_ f -> traceIntMorph (toIntMorph (Diagram f))
   where
     traceIntMorph ::
-      IntMorph (,) (Trace (,) (->)) (s, a) (s, da) (s, b) (s, db) ->
-      IntMorph (,) (Trace (,) (->)) a da b db
+      IntMorph (,) (FreeTrace (,) (->)) (s, a) (s, da) (s, b) (s, db) ->
+      IntMorph (,) (FreeTrace (,) (->)) a da b db
     traceIntMorph (IntMorph body) =
       IntMorph
-        ( yank
+        ( trace
             ( Lift (\((s1, s2), (da, b)) -> ((s1, da), (s2, b)))
                 Cat.. body
                 Cat.. Lift (\((s1, s2), (a, db)) -> ((s1, a), (s2, db)))
@@ -308,6 +308,6 @@ runDiagram d = eval (runIntMorph (toIntMorph d))
 -- Internal helpers (reused from the previous shallow-embedding definitions).
 
 turnInt ::
-  IntMorph (,) (Trace (,) (->)) a da b db ->
-  IntMorph (,) (Trace (,) (->)) db b da a
+  IntMorph (,) (FreeTrace (,) (->)) a da b db ->
+  IntMorph (,) (FreeTrace (,) (->)) db b da a
 turnInt (IntMorph f) = IntMorph (Lift M.braid Cat.. f Cat.. Lift M.braid)

@@ -251,7 +251,7 @@ g4bClosed = monoPost . traceDiffPD 0.0 1e-12 200 (diffPMono g4Step) . monoPre
 -- | Run a parameterised step over a finite prefix, returning the output trace
 -- and the parameter gradient accumulated from the supplied output cotangents.
 --
--- This is the BPTT-style gradient through a seeded loop ("register"), with
+-- This is the BPTT-style gradient through a seeded loop ("feedback"), with
 -- no lazy fixpoint.
 runDiffPSeq ::
   (Num p) =>
@@ -914,7 +914,7 @@ main = do
         finalPlus = fst (runDiffPSeq ewmaStep (alpha0 + eps) s0 0.0 (zip inputs cots))
         finalMinus = fst (runDiffPSeq ewmaStep (alpha0 - eps) s0 0.0 (zip inputs cots))
         fd = (last finalPlus - last finalMinus) / (2 * eps)
-    assert "G4a EWMA outputs match register semantics" $
+    assert "G4a EWMA outputs match feedback semantics" $
       outputs == [0.5, 0.75, 0.875]
     assert "G4a seeded DiffP gradient matches finite difference" $
       abs (dp - fd) < 1e-8 && abs (dp - analytic) < 1e-8
@@ -1295,10 +1295,10 @@ main = do
         (runMorphism m (fmap show v))
 
   do
-    -- Global: constant morphism.
-    let m = Global 7 :: Morphism 'Y ('Konst Int)
+    -- Constant: constant morphism.
+    let m = Constant 7 :: Morphism 'Y ('Konst Int)
         v = EY 5 :: Eval 'Y Int
-    assert "Global naturality" $
+    assert "Constant naturality" $
       evalNetEq [] (fmap show (runMorphism m v)) (runMorphism m (fmap show v))
 
   do

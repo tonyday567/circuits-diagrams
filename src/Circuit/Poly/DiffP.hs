@@ -35,7 +35,7 @@ import Circuit.Category (Category (..))
 import Circuit.Diff.Param (DiffP (..))
 import Circuit.Mat.Dense (Matrix, fromLists, matVec, starMatrix, toLists)
 import Circuit.Poly (Mono, Morphism (..), Poly (..), applyLens, lens)
-import Circuit.Traced (Assoc (..), Slide (..), Strength (..), Yank (..))
+import Circuit.Traced (Strength (..))
 import NumHask.Algebra.Additive qualified as NHA
 import NumHask.Algebra.Multiplicative qualified as NHM
 import NumHask.Algebra.Ring qualified as NHR

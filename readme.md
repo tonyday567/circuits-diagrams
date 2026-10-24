@@ -109,7 +109,7 @@ calculation.  The picture tells you what the linear algebra is doing.
 ## Relationship to other packages
 
 - `circuits` — the base category language: `Category`, `Tensor`, `Channel`,
-  `Traced`, `CopyDiscard`, `MergeZero`.
+  `Trace`, `CopyDiscard`, `MergeZero`.
 - `circuits-diagrams` — this package: polynomial lenses, the Int corridor, the
   string-diagram surface syntax, and SVG rendering of the diagrams.
 - `circuits-ad` — automatic differentiation for lenses.

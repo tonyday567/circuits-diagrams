@@ -13,7 +13,7 @@
 -- Identity is the symmetry on the two factors. Composition tensors the two
 -- base morphisms, reassociates so the middle pair can be eliminated, and
 -- closes it with the base category's 'trace'. Over @Trace t arr@ this means
--- every composite inherits the one-'Yank' normal form.
+-- every composite inherits the one-'Trace' normal form.
 --
 -- This module uses only the 'Trace'/'Channel' surface and introduces no
 -- new dependencies.
@@ -51,9 +51,9 @@ import Circuit.Category ((.))
 import Circuit.Category qualified as Cat (Category (..))
 import Circuit.Poly (Mono, Morphism (Compose), applyLens, lens)
 import Circuit.Syntax (Syntax (..), eval, (:+:) (..))
-import Circuit.Tensor qualified as M (Action (..), SemiTensor (..), Tensor)
-import Circuit.Trace (SigYank (..), Trace)
-import Circuit.Traced (Assoc (..), Slide (..), Yank (..), yank)
+import Circuit.Tensor qualified as M (SemiTensor (..), Symmetric (..), Tensor)
+import Circuit.Trace (FreeTrace, SigTrace (..))
+import Circuit.Traced (Assoc (..), OuterSwap (..), Trace (..), trace)
 import Data.Kind (Type)
 import Prelude hiding (id, (.))
 
@@ -62,14 +62,14 @@ import Prelude hiding (id, (.))
 -- >>> import Circuit.Category ((.))
 -- >>> import Circuit.Category qualified as Cat
 -- >>> import Circuit.Syntax (Syntax (Lift))
--- >>> import Circuit.Trace (Trace, SigYank (..))
+-- >>> import Circuit.Trace (FreeTrace, SigTrace (..))
 -- >>> import Circuit.Syntax (Syntax (..), (:+:) (..), eval)
--- >>> import Circuit.Traced (Assoc (..), Slide (..), Yank (..), yank)
--- >>> import Circuit.Tensor (Action (..), SemiTensor (..), Tensor)
+-- >>> import Circuit.Traced (Assoc (..), OuterSwap (..), Trace (..), trace)
+-- >>> import Circuit.Tensor (SemiTensor (..), Symmetric (..), Tensor)
 -- >>> import Circuit.Poly (dagger, lens, applyLens, Morphism (..), Mono)
 -- >>> import Data.Bifunctor (Bifunctor (..))
 -- >>> :set -XGADTs -XStandaloneDeriving -XFlexibleInstances -XFlexibleContexts -XScopedTypeVariables -XTypeApplications
--- >>> isYank :: Trace (,) (->) a b -> Bool; isYank x = case x of { Oper (R (YankBody _)) -> True; _ -> False }
+-- >>> isTraced :: FreeTrace (,) (->) a b -> Bool; isTraced x = case x of { Oper (R (SigTrace _)) -> True; _ -> False }
 -- >>> class Eq a => Finite a where universe :: [a]
 -- >>> instance Finite () where universe = [()]
 -- >>> instance Finite Bool where universe = [False, True]
@@ -193,7 +193,7 @@ newtype IntMorph (t :: Type -> Type -> Type) arr (ap :: Type) (am :: Type) (bp :
 -- >>> let i = id :: IntMorph (,) (->) Int Bool Int Bool
 -- >>> runIntMorph i (1, False)
 -- (False,1)
-id :: (M.Action t arr) => IntMorph t arr ap am ap am
+id :: (M.Symmetric t arr) => IntMorph t arr ap am ap am
 id = IntMorph M.braid
 
 -- | Dual of an Int morphism: swap the polarities of domain and codomain.
@@ -204,7 +204,7 @@ id = IntMorph M.braid
 -- >>> let f = IntMorph (\(a, d) -> (a * 2, d + 1)) :: IntMorph (,) (->) Int Int Int Int
 -- >>> runIntMorph (dual f) (5, 1)
 -- (6,2)
-dual :: (M.Action t arr) => IntMorph t arr ap am bp bm -> IntMorph t arr bm bp am ap
+dual :: (M.Symmetric t arr) => IntMorph t arr ap am bp bm -> IntMorph t arr bm bp am ap
 dual (IntMorph f) = IntMorph (M.braid . f . M.braid)
 
 -- | Composition in the Int construction.
@@ -213,28 +213,28 @@ dual (IntMorph f) = IntMorph (M.braid . f . M.braid)
 -- pair @(bm, bp)@ sits on the feedback wire, and close it with 'trace'. The
 -- result is again a single base arrow @arr (t ap cm) (t am cp)@.
 --
--- Nontrivial composition over @Trace (,) (->)@.  Both morphisms transform
+-- Nontrivial composition over @FreeTrace (,) (->)@.  Both morphisms transform
 -- both legs; the middle trace closes the feedback loop.  The chosen bodies
 -- are lazy in the feedback component so the lazy @(,)@ knot stays productive.
 -- Hand-computed: input @(4, 1)@ gives output @(5, 2)@.
 --
--- >>> let f = IntMorph (Lift (\(a, _) -> (a + 1, a))) :: IntMorph (,) (Trace (,) (->)) Int Int Int Int
--- >>> let g = IntMorph (Lift (\(_, c) -> (c, c + 1))) :: IntMorph (,) (Trace (,) (->)) Int Int Int Int
+-- >>> let f = IntMorph (Lift (\(a, _) -> (a + 1, a))) :: IntMorph (,) (FreeTrace (,) (->)) Int Int Int Int
+-- >>> let g = IntMorph (Lift (\(_, c) -> (c, c + 1))) :: IntMorph (,) (FreeTrace (,) (->)) Int Int Int Int
 -- >>> eval (runIntMorph (g `comp` f)) (4, 1)
 -- (5,2)
 --
--- The composite over @Trace@ inherits the one-'Yank' normal form: the inner
--- plumbing is absorbed into a single 'yank' over one base arrow.
+-- The composite over @Trace@ inherits the one-'Trace' normal form: the inner
+-- plumbing is absorbed into a single 'trace' over one base arrow.
 --
--- >>> if isYank (runIntMorph (g `comp` f)) then "one-Yank" else "not one-Yank"
--- "one-Yank"
+-- >>> if isTraced (runIntMorph (g `comp` f)) then "one-Trace" else "not one-Trace"
+-- "one-Trace"
 comp ::
   forall t arr ap am bp bm cp cm.
-  (M.Action t arr, Yank t arr) =>
+  (M.Symmetric t arr, Trace t arr) =>
   IntMorph t arr bp bm cp cm ->
   IntMorph t arr ap am bp bm ->
   IntMorph t arr ap am cp cm
-comp (IntMorph g) (IntMorph f) = IntMorph (yank (middleOut . (g `M.tensor` f) . middleIn))
+comp (IntMorph g) (IntMorph f) = IntMorph (trace (middleOut . (g `M.tensor` f) . middleIn))
   where
     id_ap = Cat.id
     id_am = Cat.id
@@ -256,7 +256,7 @@ comp (IntMorph g) (IntMorph f) = IntMorph (yank (middleOut . (g `M.tensor` f) . 
         step3 = id_bm `M.tensor` assoc @t @arr @am @bp @cp
         step4 = id_bm `M.tensor` (id_am `M.tensor` M.braid @t @arr @bp @cp)
         step5 = id_bm `M.tensor` assoc' @t @arr @am @cp @bp
-        step6 = slide @t @arr @bm @(t am cp) @bp
+        step6 = outerSwap @t @arr @bm @(t am cp) @bp
         step7 = M.braid @t @arr @(t am cp) @(t bm bp)
 
 -- | Tensor product of two Int morphisms.
@@ -266,7 +266,7 @@ comp (IntMorph g) (IntMorph f) = IntMorph (yank (middleOut . (g `M.tensor` f) . 
 -- the factors into the required @arr (t (t ap cp) (t bm dm)) (t (t am cm) (t bp dp))@ shape.
 intTensor ::
   forall t arr ap am bp bm cp cm dp dm.
-  (M.Action t arr) =>
+  (M.Symmetric t arr) =>
   IntMorph t arr ap am bp bm ->
   IntMorph t arr cp cm dp dm ->
   IntMorph t arr (t ap cp) (t am cm) (t bp dp) (t bm dm)
@@ -369,13 +369,13 @@ intBraid = IntMorph $ \ ~((x, y), (dy, dx)) -> ((dx, dy), (y, x))
 -- input unchanged.
 --
 -- >>> let i = id :: IntMorph Either (->) Int Int Int Int
--- >>> yank (runIntMorph i) (42 :: Int)
+-- >>> trace (runIntMorph i) (42 :: Int)
 -- 42
 
 -- | Mat Bool middle trace with coupled blocks.  The feedback channel is
 -- @Bool@, the @aa@ block is the swap (so its reflexive-transitive closure is
 -- the universal relation on @Bool@), and the off-diagonal @ba@/@ac@ blocks are
--- non-constant.  The helper below repeats the same @parT + slide + trace-middle@
+-- non-constant.  The helper below repeats the same @parT + outerSwap + trace-middle@
 -- wiring as 'comp', but specialised to the @Mat@/Either setup so the
 -- doctest can live in the finite-type setting.
 --
@@ -428,20 +428,20 @@ intBraid = IntMorph $ \ ~((x, y), (dy, dx)) -> ((dx, dy), (y, x))
 -- (42,"40")
 --
 -- __Trivial knot under composition.__ Take 'causal' into the 'Trace' base and
--- compose two images with 'comp'. Composition ties a 'Yank' (the middle 'trace'
+-- compose two images with 'comp'. Composition ties a 'Trace' (the middle 'trace'
 -- fires) — yet the observed value equals plain lens 'Compose' under the polarity
 -- swap, because the causal fragment feeds nothing back through the loop. The knot
 -- is tied and does nothing: pullback magnitude of the trace is zero here.
 --
--- >>> let cz (m :: Morphism (Mono xd x) (Mono yd y)) = IntMorph (Lift (\(a, db) -> let (b, put) = applyLens m a in (put db, b))) :: IntMorph (,) (Trace (,) (->)) x xd y yd
+-- >>> let cz (m :: Morphism (Mono xd x) (Mono yd y)) = IntMorph (Lift (\(a, db) -> let (b, put) = applyLens m a in (put db, b))) :: IntMorph (,) (FreeTrace (,) (->)) x xd y yd
 -- >>> let f = dagger (+1) (*2) :: Morphism (Mono Int Int) (Mono Int Int)
 -- >>> let g = dagger (*10) (+5) :: Morphism (Mono Int Int) (Mono Int Int)
 -- >>> let (b, put) = applyLens (Compose g f) 7 in (b, put 100)
 -- (80,210)
--- >>> eval (runIntMorph (comp (cz g) (cz f) :: IntMorph (,) (Trace (,) (->)) Int Int Int Int)) (7, 100)
+-- >>> eval (runIntMorph (comp (cz g) (cz f) :: IntMorph (,) (FreeTrace (,) (->)) Int Int Int Int)) (7, 100)
 -- (210,80)
--- >>> if isYank (runIntMorph (comp (cz g) (cz f) :: IntMorph (,) (Trace (,) (->)) Int Int Int Int)) then "Yank (tied, trivial)" else "Lift (no knot)"
--- "Yank (tied, trivial)"
+-- >>> if isTraced (runIntMorph (comp (cz g) (cz f) :: IntMorph (,) (FreeTrace (,) (->)) Int Int Int Int)) then "Trace (tied, trivial)" else "Lift (no knot)"
+-- "Trace (tied, trivial)"
 causal :: Morphism (Mono da a) (Mono db b) -> IntMorph (,) (->) a da b db
 causal m = IntMorph (\(a, db) -> let (b, put) = applyLens m a in (put db, b))
 
