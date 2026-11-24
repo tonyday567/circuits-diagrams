@@ -6,6 +6,7 @@
 module Main (main) where
 
 import Chart qualified
+import Circuit.Body (Body (Body), bodyAsLens, lensAsBody)
 import Circuit.Category (id, (.))
 import Circuit.Diagram.Hyper
   ( BoundaryEnd (..),
@@ -19,11 +20,8 @@ import Circuit.Diagram.Hyper
   )
 import Circuit.Diff.Param (DiffP (..), splitP)
 import Circuit.Machine
-  ( Body (Body, commit, emit),
-    Moore,
+  ( Moore (Moore, commit, emit),
     MooreT (..),
-    bodyAsLens,
-    lensAsBody,
     moore,
     scan,
   )
@@ -110,21 +108,20 @@ assertError msg action = do
 -- | Runners for cells over the monomial interface.
 --
 -- The machine layer factored the old Cell through the channel: a
--- 'Moore' body's 'commit' is the old absorb, its 'emit' (sealed at
--- 'Const') the old observe.  A cell never carried a seed, so these
--- shims keep the old run-time seeding; 'evalAsCell' in Circuit.Poly
--- still supplies the (step, output) legs, and where the new 'Body'
--- demands an 'init' the oracles never run, the absence is the named
--- bottom 'unseeded'.
+-- 'Moore' body's 'commit' is the old absorb and its 'emit' the old
+-- observe. A cell never carried a seed, so these shims keep the old
+-- run-time seeding; 'evalAsCell' in Circuit.Poly still supplies the
+-- (step, output) legs, and where the new 'Moore' demands an 'init' the
+-- oracles never run, the absence is the named bottom 'unseeded'.
 processFromSeed :: s -> Moore (,) s (->) i o -> MooreT (,) (->) i o
-processFromSeed s0 (Body _ k e) = moore (\a -> k (s0, a)) (curry k) (unConst . e)
+processFromSeed s0 (Moore _ k e) = moore (\a -> k (s0, a)) (curry k) e
 
 cellFromEval :: (s -> Eval (Mono i o) s) -> Moore (,) s (->) i o
-cellFromEval f = Body unseeded k (Const . o)
+cellFromEval f = Moore unseeded k o
   where
     (k, o) = evalAsCell f
 
--- | The old Cell had no seed leg; the new 'Body' demands one.  Every
+-- | The old Cell had no seed leg; the new 'Moore' demands one. Every
 -- oracle below seeds at run time ('processFromSeed'), so this is a
 -- checked absence, in the spirit of the file's dead 'Void' bottoms.
 unseeded :: i -> s
@@ -807,13 +804,12 @@ main = do
     --
     -- For a cell over a monomial interface, the current output must not
     -- depend on the current input direction.  The elimination at (s, i)
-    -- pairs the next state commit sys (s, i) with the output
-    -- unConst (emit sys s).
+    -- pairs the next state commit sys (s, i) with the output emit sys s.
     let sys :: Moore (,) Int (->) Int Int
         sys = cellFromEval $ \s -> EP (EK s, EE (\o -> s + o))
-        pos1 = unConst (emit sys 5) -- output half of the elimination at (5, 10)
-        pos2 = unConst (emit sys 5) -- output half of the elimination at (5, 20)
-        pos3 = unConst (emit sys 7) -- output half of the elimination at (7, 10)
+        pos1 = emit sys 5 -- output half of the elimination at (5, 10)
+        pos2 = emit sys 5 -- output half of the elimination at (5, 20)
+        pos3 = emit sys 7 -- output half of the elimination at (7, 10)
     assert "K3 output depends only on state" $ pos1 == pos2 && pos1 /= pos3
 
   do
@@ -861,13 +857,26 @@ main = do
   do
     let sys :: Moore (,) Int (->) Int Int
         sys = cellFromEval $ \s -> EP (EK (s * 2), EE (\i -> s + i))
-        -- Round-trip preserves the (output, transition) view at every state.
-        roundTripOk s =
-          let sys' = lensAsBody unseeded (bodyAsLens sys)
-           in unConst (emit sys s) == unConst (emit sys' s)
-                && all (\i -> commit sys (s, i) == commit sys' (s, i)) [-5 .. 5]
+        body = case sys of Moore i c e -> Body i c (Const . e)
+        inputs = [-5 .. 5]
+        states = [-2 .. 5]
+        observed =
+          [ (o, map put inputs)
+          | s <- states,
+            let (o, put) = applyLens (bodyAsLens body) s
+          ]
+        expected = [(s * 2, [s + i | i <- inputs]) | s <- states]
+    assert "S1: bodyAsLens dictionary is emit and curried commit" $
+      observed == expected
+
+    -- Round-trip preserves the (output, transition) view at every state.
+    let roundTripOk s =
+          case lensAsBody unseeded (bodyAsLens body) of
+            Body _ k' e' ->
+              emit sys s == unConst (e' s)
+                && all (\i -> commit sys (s, i) == k' (s, i)) inputs
     assert "S1: lensAsBody . bodyAsLens round-trips" $
-      all roundTripOk [0 .. 5]
+      all roundTripOk states
 
     -- The other direction of the iso: build a lens directly, round-trip
     -- through a cell, and compare on positions and directions.
@@ -877,9 +886,18 @@ main = do
         roundTripLensOk s =
           let (o, put) = applyLens m s
               (o', put') = applyLens m' s
-           in o == o' && all (\i -> put i == put' i) [-5 .. 5]
+           in o == o' && all (\i -> put i == put' i) inputs
     assert "S1: bodyAsLens . lensAsBody round-trips" $
-      all roundTripLensOk [0 .. 5]
+      all roundTripLensOk states
+
+    -- Check the forward construction independently of bodyAsLens, including
+    -- the seed that neither the lens nor the round-trip can represent.
+    let Body j k e = lensAsBody (+ 100) m
+    assert "S1: lensAsBody preserves seed, output, and transition" $
+      j 4 == 104
+        && all
+          (\s -> unConst (e s) == s * 2 && all (\i -> k (s, i) == s + i) inputs)
+          states
 
   ----------------------------------------------------------------------
   -- S2: comonoid = category concretely
